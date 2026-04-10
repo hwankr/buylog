@@ -1,0 +1,33 @@
+name: enable-auto-merge
+
+on:
+  pull_request:
+    # Only target the develop branch for auto‑merge.
+    branches: [develop]
+    types: [opened, reopened, ready_for_review]
+
+jobs:
+  enable-auto-merge:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            // Automatically enable auto‑merge (squash) for the PR
+            await github.graphql(`
+              mutation($pullRequestId: ID!) {
+                enablePullRequestAutoMerge(input: {
+                  pullRequestId: $pullRequestId,
+                  mergeMethod: SQUASH
+                }) {
+                  clientMutationId
+                }
+              }
+            `, {
+              pullRequestId: context.payload.pull_request.node_id
+            });
