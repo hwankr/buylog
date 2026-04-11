@@ -91,9 +91,18 @@ int calcDday({
 	required int predictedCycleDays,
 	required DateTime registeredAt,
 }) {
+	if (purchaseDates.isEmpty && registeredAt == null) return predictedCycleDays;
 	final now = DateTime.now();
 	final baseDate = purchaseDates.isEmpty ? registeredAt : purchaseDates.reduce((a, b) => a.isAfter(b) ? a : b);
 	final difference = now.difference(baseDate).inDays;
 
 	return predictedCycleDays - difference;
 }
+
+// double calcRemainingPercent({
+// 	required List<DateTime> purchaseDates,
+// 	required int predictedCycleDays,
+// 	required DateTime registeredAt,
+// }) {
+
+// }
