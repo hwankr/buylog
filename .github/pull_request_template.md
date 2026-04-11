@@ -1,23 +1,23 @@
-## What changed
+## 무엇이 변경되었나요?
 
-Describe the core changes introduced in this pull request.  Focus on high-level behaviour rather than low-level implementation details.
+이 PR에서 변경한 핵심 내용을 적어 주세요. 세부 구현보다는 사용자 관점의 동작 변화와 주요 구조 변경을 중심으로 작성해 주세요.
 
-## Why
+## 왜 필요한가요?
 
-Explain the motivation behind these changes.  Link related issues or feature requests if applicable.
+이 변경이 필요한 이유를 설명해 주세요. 관련 이슈, 요구사항, 배경이 있다면 함께 적어 주세요.
 
-## Test checklist
+## 테스트 체크리스트
 
-Please run these checks locally before marking the PR ready for review:
+리뷰 요청 전에 아래 항목을 로컬에서 확인해 주세요.
 
-- [ ] `dart format -o none --set-exit-if-changed .` passes (no formatting changes required)
-- [ ] `flutter analyze` reports no issues
-- [ ] `flutter test` passes all tests
+- [ ] `dart format -o none --set-exit-if-changed .` 통과
+- [ ] `flutter analyze` 결과 이상 없음
+- [ ] `flutter test` 전체 통과
 
-## Main risk
+## 주요 위험 요소
 
-Identify the area of the code most likely affected by this change or any potential side effects.  Highlight any particularly risky parts of this PR.
+이번 변경으로 인해 가장 영향을 많이 받을 수 있는 영역이나 예상되는 부작용을 적어 주세요. 특히 주의해서 봐야 할 부분이 있다면 함께 적어 주세요.
 
-## Notes for AI review
+## AI 리뷰 참고 사항
 
-Add any specific areas you would like Codex (or other reviewers) to focus on during the review.  For example: `Focus on null-safety and state management`.
+Codex(또는 다른 리뷰어)가 특히 집중해서 봐야 할 부분이 있다면 적어 주세요. 예: `null-safety와 상태 관리 위주로 확인 부탁드립니다.`
