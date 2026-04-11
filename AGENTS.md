@@ -9,4 +9,4 @@ This file defines high-level rules that instruct Codex on how to review pull req
 - **Business logic inside widgets** – flag and block PRs that embed business logic directly in Flutter widget classes. Prefer separating state management and logic into services or providers.
 - **Risky dependency additions** – flag new packages that are not vetted or necessary. Avoid adding large dependencies without discussion.
 - **Changes under `.github/**`** – treat modifications to GitHub Actions workflows and configuration as high priority (P1). Changing CI/CD configuration can impact the whole project and should be reviewed carefully.
-- **PR communication language** – write pull request titles, descriptions, and review comments in Korean by default. Keep code, file paths, workflow names, and shell commands in English when needed.
+- **PR communication language** – write pull request titles, descriptions, and review comments in Korean by default. Keep code, file paths, workflow names, and shell commands in English when needed. Prefer concise labels such as `변경 사항`, `변경 이유`, `테스트`, `참고 사항`, and `리뷰 포인트` over question-style headings.
