@@ -72,4 +72,23 @@ void main() {
       expect(dDay, -5);
     });
   });
+
+  // calcRemainingPercent
+  test('calcRemainingPercent - 오늘 구매', () {
+    final result = calcRemainingPercent(
+      purchaseDates: [DateTime.now()],
+      predictedCycleDays: 30,
+      registeredAt: DateTime.now(),
+    );
+    print('잔여량: $result'); // 기대값: 0.0
+  });
+
+  test('calcRemainingPercent - 절반 경과', () {
+    final result = calcRemainingPercent(
+      purchaseDates: [DateTime.now().subtract(Duration(days: 15))],
+      predictedCycleDays: 30,
+      registeredAt: DateTime.now(),
+    );
+    print('잔여량: $result'); // 기대값: 0.5
+  });
 }
