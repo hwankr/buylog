@@ -53,14 +53,7 @@ class ItemCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               item.brand,
-<<<<<<< HEAD
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textMuted,
-              ),
-=======
               style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
->>>>>>> develop
             ),
             const SizedBox(height: 12),
             ClipRRect(
@@ -73,27 +66,15 @@ class ItemCard extends StatelessWidget {
                   item.daysRemaining <= 3
                       ? AppColors.danger
                       : item.daysRemaining <= 7
-<<<<<<< HEAD
-                          ? AppColors.warning
-                          : AppColors.primary,
-=======
                       ? AppColors.warning
                       : AppColors.primary,
->>>>>>> develop
                 ),
               ),
             ),
             const SizedBox(height: 6),
             Text(
               '${item.cycleDays}일 주기',
-<<<<<<< HEAD
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textMuted,
-              ),
-=======
               style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
->>>>>>> develop
             ),
           ],
         ),
@@ -120,14 +101,9 @@ class PurchaseListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-<<<<<<< HEAD
-    final lastPurchase =
-        item.purchaseHistory.isNotEmpty ? item.purchaseHistory.first : null;
-=======
     final lastPurchase = item.purchaseHistory.isNotEmpty
         ? item.purchaseHistory.first
         : null;
->>>>>>> develop
 
     return GestureDetector(
       onTap: onTap,
