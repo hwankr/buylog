@@ -26,19 +26,8 @@ class ItemDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(item.name),
         actions: [
-<<<<<<< HEAD
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.share_outlined),
-            onPressed: () {},
-          ),
-=======
           IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () {}),
           IconButton(icon: const Icon(Icons.share_outlined), onPressed: () {}),
->>>>>>> develop
         ],
       ),
       body: SingleChildScrollView(
@@ -96,15 +85,10 @@ class ItemDetailScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-<<<<<<< HEAD
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-=======
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 3,
                   ),
->>>>>>> develop
                   decoration: BoxDecoration(
                     color: AppColors.primaryLight2,
                     borderRadius: BorderRadius.circular(6),
@@ -254,16 +238,11 @@ class ItemDetailScreen extends StatelessWidget {
         children: [
           const Row(
             children: [
-<<<<<<< HEAD
-              Icon(Icons.auto_awesome_outlined,
-                  size: 18, color: AppColors.primary),
-=======
               Icon(
                 Icons.auto_awesome_outlined,
                 size: 18,
                 color: AppColors.primary,
               ),
->>>>>>> develop
               SizedBox(width: 8),
               Text(
                 'AI 가격 비교',
@@ -276,41 +255,6 @@ class ItemDetailScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-<<<<<<< HEAD
-          ...SampleData.priceComparisons.map((p) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  children: [
-                    if (p.isLowest)
-                      const Icon(Icons.check_circle,
-                          size: 16, color: AppColors.success)
-                    else
-                      const SizedBox(width: 16),
-                    const SizedBox(width: 10),
-                    Text(
-                      p.store,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight:
-                            p.isLowest ? FontWeight.w600 : FontWeight.w400,
-                        color:
-                            p.isLowest ? AppColors.text : AppColors.textSecondary,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      _formatPrice(p.price),
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight:
-                            p.isLowest ? FontWeight.w700 : FontWeight.w400,
-                        color: p.isLowest ? AppColors.success : AppColors.text,
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-=======
           ...SampleData.priceComparisons.map(
             (p) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -352,7 +296,6 @@ class ItemDetailScreen extends StatelessWidget {
               ),
             ),
           ),
->>>>>>> develop
         ],
       ),
     );
@@ -400,14 +343,7 @@ class ItemDetailScreen extends StatelessWidget {
                       ),
                       if (!isLast)
                         Expanded(
-<<<<<<< HEAD
-                          child: Container(
-                            width: 1.5,
-                            color: AppColors.border,
-                          ),
-=======
                           child: Container(width: 1.5, color: AppColors.border),
->>>>>>> develop
                         ),
                     ],
                   ),

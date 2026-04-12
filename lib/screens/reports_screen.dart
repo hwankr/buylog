@@ -296,14 +296,7 @@ class ReportsScreen extends StatelessWidget {
                               ),
                             ),
                           ),
-<<<<<<< HEAD
-                          barGroups: _monthlyData
-                              .asMap()
-                              .entries
-                              .map((entry) {
-=======
                           barGroups: _monthlyData.asMap().entries.map((entry) {
->>>>>>> develop
                             final isLatest =
                                 entry.key == _monthlyData.length - 1;
                             return BarChartGroupData(
@@ -355,15 +348,10 @@ class ReportsScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final c = _categories[index];
                 return Container(
-<<<<<<< HEAD
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-=======
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 14,
                   ),
->>>>>>> develop
                   decoration: BoxDecoration(
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(14),
@@ -410,12 +398,8 @@ class ReportsScreen extends StatelessWidget {
                                 minHeight: 4,
                                 backgroundColor: AppColors.border,
                                 valueColor: AlwaysStoppedAnimation<Color>(
-<<<<<<< HEAD
-                                    c['color'] as Color),
-=======
                                   c['color'] as Color,
                                 ),
->>>>>>> develop
                               ),
                             ),
                           ],

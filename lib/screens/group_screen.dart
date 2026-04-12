@@ -24,14 +24,7 @@ class _GroupScreenState extends State<GroupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-<<<<<<< HEAD
-                  Text(
-                    '그룹',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-=======
                   Text('그룹', style: Theme.of(context).textTheme.headlineMedium),
->>>>>>> develop
                 ],
               ),
             ),
@@ -53,16 +46,11 @@ class _GroupScreenState extends State<GroupScreen> {
                     // Group name
                     const Row(
                       children: [
-<<<<<<< HEAD
-                        Icon(Icons.home_outlined,
-                            size: 22, color: AppColors.primary),
-=======
                         Icon(
                           Icons.home_outlined,
                           size: 22,
                           color: AppColors.primary,
                         ),
->>>>>>> develop
                         SizedBox(width: 10),
                         Text(
                           '우리 가족',
@@ -79,36 +67,6 @@ class _GroupScreenState extends State<GroupScreen> {
                     // Member avatars
                     Row(
                       children: [
-<<<<<<< HEAD
-                        ...SampleData.groupMembers.map((m) => Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: Column(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 22,
-                                    backgroundColor:
-                                        Color(int.parse(m.avatarColor)),
-                                    child: Text(
-                                      m.name[0],
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    m.name,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )),
-=======
                         ...SampleData.groupMembers.map(
                           (m) => Padding(
                             padding: const EdgeInsets.only(right: 12),
@@ -140,7 +98,6 @@ class _GroupScreenState extends State<GroupScreen> {
                             ),
                           ),
                         ),
->>>>>>> develop
                         Padding(
                           padding: const EdgeInsets.only(bottom: 18),
                           child: GestureDetector(
@@ -148,16 +105,11 @@ class _GroupScreenState extends State<GroupScreen> {
                             child: CircleAvatar(
                               radius: 22,
                               backgroundColor: AppColors.surfaceAlt,
-<<<<<<< HEAD
-                              child: const Icon(Icons.add,
-                                  color: AppColors.textMuted, size: 22),
-=======
                               child: const Icon(
                                 Icons.add,
                                 color: AppColors.textMuted,
                                 size: 22,
                               ),
->>>>>>> develop
                             ),
                           ),
                         ),
@@ -168,29 +120,20 @@ class _GroupScreenState extends State<GroupScreen> {
                     // Invite code
                     Container(
                       padding: const EdgeInsets.symmetric(
-<<<<<<< HEAD
-                          horizontal: 16, vertical: 12),
-=======
                         horizontal: 16,
                         vertical: 12,
                       ),
->>>>>>> develop
                       decoration: BoxDecoration(
                         color: AppColors.surfaceAlt,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
-<<<<<<< HEAD
-                          const Icon(Icons.link,
-                              size: 18, color: AppColors.textMuted),
-=======
                           const Icon(
                             Icons.link,
                             size: 18,
                             color: AppColors.textMuted,
                           ),
->>>>>>> develop
                           const SizedBox(width: 10),
                           const Text(
                             '초대 코드: ',
@@ -218,16 +161,11 @@ class _GroupScreenState extends State<GroupScreen> {
                                 ),
                               );
                             },
-<<<<<<< HEAD
-                            child: const Icon(Icons.copy,
-                                size: 18, color: AppColors.primary),
-=======
                             child: const Icon(
                               Icons.copy,
                               size: 18,
                               color: AppColors.primary,
                             ),
->>>>>>> develop
                           ),
                         ],
                       ),
@@ -339,12 +277,7 @@ class _GroupScreenState extends State<GroupScreen> {
 
     final widgets = <Widget>[];
     for (final category in categories) {
-<<<<<<< HEAD
-      final categoryItems =
-          items.where((i) => i.category == category).toList();
-=======
       final categoryItems = items.where((i) => i.category == category).toList();
->>>>>>> develop
 
       widgets.add(
         SliverToBoxAdapter(
@@ -371,14 +304,6 @@ class _GroupScreenState extends State<GroupScreen> {
             itemBuilder: (context, index) {
               final item = categoryItems[index];
               final updater = _showGroupItems
-<<<<<<< HEAD
-                  ? SampleData.groupMembers[index % SampleData.groupMembers.length]
-                  : null;
-
-              return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-=======
                   ? SampleData.groupMembers[index %
                         SampleData.groupMembers.length]
                   : null;
@@ -388,7 +313,6 @@ class _GroupScreenState extends State<GroupScreen> {
                   horizontal: 16,
                   vertical: 12,
                 ),
->>>>>>> develop
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(14),
@@ -403,16 +327,11 @@ class _GroupScreenState extends State<GroupScreen> {
                         color: AppColors.primaryLight2,
                         borderRadius: BorderRadius.circular(10),
                       ),
-<<<<<<< HEAD
-                      child:
-                          Icon(item.icon, color: AppColors.primary, size: 20),
-=======
                       child: Icon(
                         item.icon,
                         color: AppColors.primary,
                         size: 20,
                       ),
->>>>>>> develop
                     ),
                     const SizedBox(width: 12),
                     Expanded(

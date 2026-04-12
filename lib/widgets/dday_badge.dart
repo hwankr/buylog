@@ -5,15 +5,7 @@ class DdayBadge extends StatelessWidget {
   final int daysRemaining;
   final double fontSize;
 
-<<<<<<< HEAD
-  const DdayBadge({
-    super.key,
-    required this.daysRemaining,
-    this.fontSize = 12,
-  });
-=======
   const DdayBadge({super.key, required this.daysRemaining, this.fontSize = 12});
->>>>>>> develop
 
   Color get _backgroundColor {
     if (daysRemaining <= 3) return AppColors.dangerLight;

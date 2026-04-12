@@ -112,14 +112,7 @@ class _ScanScreenState extends State<ScanScreen>
                   const Center(
                     child: Text(
                       '카메라 미리보기',
-<<<<<<< HEAD
-                      style: TextStyle(
-                        color: Colors.white54,
-                        fontSize: 14,
-                      ),
-=======
                       style: TextStyle(color: Colors.white54, fontSize: 14),
->>>>>>> develop
                     ),
                   ),
                 ],
@@ -207,14 +200,7 @@ class _ScanScreenState extends State<ScanScreen>
           const SizedBox(height: 8),
           const Text(
             'OCR로 데이터를 추출하고 있습니다',
-<<<<<<< HEAD
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textMuted,
-            ),
-=======
             style: TextStyle(fontSize: 14, color: AppColors.textMuted),
->>>>>>> develop
           ),
         ],
       ),
@@ -229,14 +215,6 @@ class _ScanScreenState extends State<ScanScreen>
         children: [
           Row(
             children: [
-<<<<<<< HEAD
-              const Icon(Icons.check_circle, color: AppColors.success, size: 24),
-              const SizedBox(width: 8),
-              Text(
-                '스캔 완료',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-=======
               const Icon(
                 Icons.check_circle,
                 color: AppColors.success,
@@ -244,7 +222,6 @@ class _ScanScreenState extends State<ScanScreen>
               ),
               const SizedBox(width: 8),
               Text('스캔 완료', style: Theme.of(context).textTheme.headlineMedium),
->>>>>>> develop
             ],
           ),
           const SizedBox(height: 6),
@@ -359,15 +336,10 @@ class _ScanScreenState extends State<ScanScreen>
             style: const TextStyle(fontSize: 15, color: AppColors.text),
             decoration: InputDecoration(
               isDense: true,
-<<<<<<< HEAD
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-=======
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 10,
               ),
->>>>>>> develop
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: AppColors.border),
@@ -378,15 +350,10 @@ class _ScanScreenState extends State<ScanScreen>
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-<<<<<<< HEAD
-                borderSide:
-                    const BorderSide(color: AppColors.primary, width: 1.5),
-=======
                 borderSide: const BorderSide(
                   color: AppColors.primary,
                   width: 1.5,
                 ),
->>>>>>> develop
               ),
             ),
           ),
@@ -400,15 +367,11 @@ class _ScanScreenState extends State<ScanScreen>
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
-<<<<<<< HEAD
-          const Icon(Icons.drag_indicator, size: 18, color: AppColors.textMuted),
-=======
           const Icon(
             Icons.drag_indicator,
             size: 18,
             color: AppColors.textMuted,
           ),
->>>>>>> develop
           const SizedBox(width: 8),
           Expanded(
             flex: 3,
@@ -417,15 +380,10 @@ class _ScanScreenState extends State<ScanScreen>
               style: const TextStyle(fontSize: 14, color: AppColors.text),
               decoration: InputDecoration(
                 isDense: true,
-<<<<<<< HEAD
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-=======
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 8,
                 ),
->>>>>>> develop
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(color: AppColors.border),
@@ -450,15 +408,10 @@ class _ScanScreenState extends State<ScanScreen>
               ),
               decoration: InputDecoration(
                 isDense: true,
-<<<<<<< HEAD
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-=======
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 8,
                 ),
->>>>>>> develop
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(color: AppColors.border),
