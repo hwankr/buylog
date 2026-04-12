@@ -6,6 +6,7 @@ import 'screens/group_screen.dart';
 import 'screens/scan_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
+<<<<<<< HEAD
 import 'package:supabase_flutter/supabase_flutter.dart'; // [Issue 4] Supabase 연동을 위한 임포트
 
 void main() async{
@@ -16,6 +17,11 @@ void main() async{
     anonKey: 'sb_publishable_FO7WmA_Pu4RsGgsfRJzssQ_f0orCu7w',
   );
 
+=======
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+>>>>>>> develop
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -60,6 +66,7 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+<<<<<<< HEAD
       body: IndexedStack(
         index: _currentIndex,
         children: _screens,
@@ -70,6 +77,13 @@ class _MainNavigationState extends State<MainNavigation> {
           border: Border(
             top: BorderSide(color: AppColors.border, width: 0.5),
           ),
+=======
+      body: IndexedStack(index: _currentIndex, children: _screens),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
+>>>>>>> develop
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,

@@ -95,7 +95,14 @@ class AppTheme {
         unselectedItemColor: AppColors.textMuted,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
+<<<<<<< HEAD
         selectedLabelStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+=======
+        selectedLabelStyle: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+>>>>>>> develop
         unselectedLabelStyle: TextStyle(fontSize: 11),
       ),
     );

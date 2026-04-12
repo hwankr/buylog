@@ -28,6 +28,7 @@ class ConsumableItem {
     this.purchaseHistory = const [],
     this.imageUrl,
   });
+<<<<<<< HEAD
 
   factory ConsumableItem.fromJson(Map<String, dynamic> json) {
     // 구매 이력 추출
@@ -77,10 +78,21 @@ class PurchaseRecord {
   final String store; // 구매처
 
   PurchaseRecord({
+=======
+}
+
+class PurchaseRecord {
+  final DateTime date;
+  final int price;
+  final String store;
+
+  const PurchaseRecord({
+>>>>>>> develop
     required this.date,
     required this.price,
     required this.store,
   });
+<<<<<<< HEAD
 
   // JSON -> PurchaseRecord 객체 변환
   factory PurchaseRecord.fromJson(Map<String, dynamic> json) {
@@ -95,16 +107,22 @@ class PurchaseRecord {
       store: json['store_name'] ?? '알 수 없음',
     );
   }
+=======
+>>>>>>> develop
 }
 
 class GroupMember {
   final String name;
   final String avatarColor;
 
+<<<<<<< HEAD
   const GroupMember({
     required this.name,
     required this.avatarColor,
   });
+=======
+  const GroupMember({required this.name, required this.avatarColor});
+>>>>>>> develop
 }
 
 class PriceComparison {
@@ -117,4 +135,8 @@ class PriceComparison {
     required this.price,
     this.isLowest = false,
   });
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> develop
