@@ -4,10 +4,7 @@ import 'package:buylog/services/ai/prediction_service.dart';
 void main() {
   group('Prediction Logic Tests', () {
     test('Phase 1 - 데이터 없을 때 기본값 확인', () {
-      final result = predictCycle(
-        purchaseDates: [],
-        categoryDefaultDays: 30,
-      );
+      final result = predictCycle(purchaseDates: [], categoryDefaultDays: 30);
       expect(result.predictedCycleDays, 30);
       expect(result.phase, PredictionPhase.phase1);
     });
@@ -16,8 +13,8 @@ void main() {
       final result = predictCycle(
         purchaseDates: [
           DateTime(2024, 1, 1),
-          DateTime(2024, 2, 5),   // 간격 35일
-          DateTime(2024, 3, 10),  // 간격 34일 (윤년)
+          DateTime(2024, 2, 5), // 간격 35일
+          DateTime(2024, 3, 10), // 간격 34일 (윤년)
         ],
         categoryDefaultDays: 30,
       );
@@ -31,7 +28,7 @@ void main() {
       final now = DateTime.now();
       // 등록일이 10일 전이고 주기가 30일이면, 남은 D-day는 20일
       final registeredAt = now.subtract(Duration(days: 10));
-      
+
       final dDay = calcDday(
         purchaseDates: [],
         predictedCycleDays: 30,
@@ -45,12 +42,9 @@ void main() {
       final now = DateTime.now();
       // 마지막 구매가 5일 전이고 주기가 14일이면, 남은 D-day는 9일
       final lastPurchase = now.subtract(Duration(days: 5));
-      
+
       final dDay = calcDday(
-        purchaseDates: [
-          now.subtract(Duration(days: 20)),
-          lastPurchase,
-        ],
+        purchaseDates: [now.subtract(Duration(days: 20)), lastPurchase],
         predictedCycleDays: 14,
         registeredAt: now.subtract(Duration(days: 30)),
       );
@@ -62,7 +56,7 @@ void main() {
       final now = DateTime.now();
       // 마지막 구매가 20일 전인데 주기가 15일이면, D-5일
       final lastPurchase = now.subtract(Duration(days: 20));
-      
+
       final dDay = calcDday(
         purchaseDates: [lastPurchase],
         predictedCycleDays: 15,
@@ -80,7 +74,7 @@ void main() {
       predictedCycleDays: 30,
       registeredAt: DateTime.now(),
     );
-    print('잔여량: $result'); // 기대값: 0.0
+    expect(result, 0.0); // 기대값: 0.0
   });
 
   test('calcRemainingPercent - 절반 경과', () {
@@ -89,6 +83,6 @@ void main() {
       predictedCycleDays: 30,
       registeredAt: DateTime.now(),
     );
-    print('잔여량: $result'); // 기대값: 0.5
+    expect(result, 0.5); // 기대값: 0.5
   });
 }

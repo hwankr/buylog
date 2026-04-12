@@ -92,7 +92,11 @@ class SampleData {
       cycleDays: 60,
       progress: 0.70,
       purchaseHistory: [
-        PurchaseRecord(date: DateTime(2026, 2, 10), price: 12800, store: '올리브영'),
+        PurchaseRecord(
+          date: DateTime(2026, 2, 10),
+          price: 12800,
+          store: '올리브영',
+        ),
       ],
     ),
   ];

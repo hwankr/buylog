@@ -24,10 +24,7 @@ class _GroupScreenState extends State<GroupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '그룹',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
+                  Text('그룹', style: Theme.of(context).textTheme.headlineMedium),
                 ],
               ),
             ),
@@ -49,8 +46,11 @@ class _GroupScreenState extends State<GroupScreen> {
                     // Group name
                     const Row(
                       children: [
-                        Icon(Icons.home_outlined,
-                            size: 22, color: AppColors.primary),
+                        Icon(
+                          Icons.home_outlined,
+                          size: 22,
+                          color: AppColors.primary,
+                        ),
                         SizedBox(width: 10),
                         Text(
                           '우리 가족',
@@ -67,34 +67,37 @@ class _GroupScreenState extends State<GroupScreen> {
                     // Member avatars
                     Row(
                       children: [
-                        ...SampleData.groupMembers.map((m) => Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: Column(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 22,
-                                    backgroundColor:
-                                        Color(int.parse(m.avatarColor)),
-                                    child: Text(
-                                      m.name[0],
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 16,
-                                      ),
-                                    ),
+                        ...SampleData.groupMembers.map(
+                          (m) => Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: Column(
+                              children: [
+                                CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor: Color(
+                                    int.parse(m.avatarColor),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    m.name,
+                                  child: Text(
+                                    m.name[0],
                                     style: const TextStyle(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
                                     ),
                                   ),
-                                ],
-                              ),
-                            )),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  m.name,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                         Padding(
                           padding: const EdgeInsets.only(bottom: 18),
                           child: GestureDetector(
@@ -102,8 +105,11 @@ class _GroupScreenState extends State<GroupScreen> {
                             child: CircleAvatar(
                               radius: 22,
                               backgroundColor: AppColors.surfaceAlt,
-                              child: const Icon(Icons.add,
-                                  color: AppColors.textMuted, size: 22),
+                              child: const Icon(
+                                Icons.add,
+                                color: AppColors.textMuted,
+                                size: 22,
+                              ),
                             ),
                           ),
                         ),
@@ -114,15 +120,20 @@ class _GroupScreenState extends State<GroupScreen> {
                     // Invite code
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceAlt,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.link,
-                              size: 18, color: AppColors.textMuted),
+                          const Icon(
+                            Icons.link,
+                            size: 18,
+                            color: AppColors.textMuted,
+                          ),
                           const SizedBox(width: 10),
                           const Text(
                             '초대 코드: ',
@@ -150,8 +161,11 @@ class _GroupScreenState extends State<GroupScreen> {
                                 ),
                               );
                             },
-                            child: const Icon(Icons.copy,
-                                size: 18, color: AppColors.primary),
+                            child: const Icon(
+                              Icons.copy,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
                           ),
                         ],
                       ),
@@ -263,8 +277,7 @@ class _GroupScreenState extends State<GroupScreen> {
 
     final widgets = <Widget>[];
     for (final category in categories) {
-      final categoryItems =
-          items.where((i) => i.category == category).toList();
+      final categoryItems = items.where((i) => i.category == category).toList();
 
       widgets.add(
         SliverToBoxAdapter(
@@ -291,12 +304,15 @@ class _GroupScreenState extends State<GroupScreen> {
             itemBuilder: (context, index) {
               final item = categoryItems[index];
               final updater = _showGroupItems
-                  ? SampleData.groupMembers[index % SampleData.groupMembers.length]
+                  ? SampleData.groupMembers[index %
+                        SampleData.groupMembers.length]
                   : null;
 
               return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(14),
@@ -311,8 +327,11 @@ class _GroupScreenState extends State<GroupScreen> {
                         color: AppColors.primaryLight2,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child:
-                          Icon(item.icon, color: AppColors.primary, size: 20),
+                      child: Icon(
+                        item.icon,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

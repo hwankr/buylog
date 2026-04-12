@@ -12,10 +12,7 @@ class SettingsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '설정',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
+            Text('설정', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 24),
 
             // Profile card
@@ -64,10 +61,7 @@ class SettingsScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(
-                    Icons.chevron_right,
-                    color: AppColors.textMuted,
-                  ),
+                  const Icon(Icons.chevron_right, color: AppColors.textMuted),
                 ],
               ),
             ),
@@ -81,16 +75,8 @@ class SettingsScreen extends StatelessWidget {
                 '알림 설정',
                 subtitle: 'D-day 알림, 가격 변동 알림',
               ),
-              _settingsTile(
-                Icons.palette_outlined,
-                '테마',
-                subtitle: '라이트 모드',
-              ),
-              _settingsTile(
-                Icons.language_outlined,
-                '언어',
-                subtitle: '한국어',
-              ),
+              _settingsTile(Icons.palette_outlined, '테마', subtitle: '라이트 모드'),
+              _settingsTile(Icons.language_outlined, '언어', subtitle: '한국어'),
             ]),
             const SizedBox(height: 20),
 
@@ -102,14 +88,8 @@ class SettingsScreen extends StatelessWidget {
                 '데이터 동기화',
                 subtitle: '마지막 동기화: 오늘 09:30',
               ),
-              _settingsTile(
-                Icons.download_outlined,
-                '데이터 내보내기',
-              ),
-              _settingsTile(
-                Icons.upload_outlined,
-                '데이터 가져오기',
-              ),
+              _settingsTile(Icons.download_outlined, '데이터 내보내기'),
+              _settingsTile(Icons.upload_outlined, '데이터 가져오기'),
             ]),
             const SizedBox(height: 20),
 
@@ -199,11 +179,7 @@ class SettingsScreen extends StatelessWidget {
           for (var i = 0; i < children.length; i++) ...[
             children[i],
             if (i < children.length - 1)
-              const Divider(
-                height: 0.5,
-                indent: 52,
-                color: AppColors.border,
-              ),
+              const Divider(height: 0.5, indent: 52, color: AppColors.border),
           ],
         ],
       ),

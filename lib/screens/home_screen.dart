@@ -44,10 +44,7 @@ class HomeScreen extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '교체 임박',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
+                  Text('교체 임박', style: Theme.of(context).textTheme.titleLarge),
                   Text(
                     '${upcoming.where((i) => i.daysRemaining <= 14).length}개',
                     style: const TextStyle(
@@ -97,11 +94,14 @@ class HomeScreen extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             sliver: SliverList.separated(
-              itemCount: items.where((i) => i.purchaseHistory.isNotEmpty).length,
+              itemCount: items
+                  .where((i) => i.purchaseHistory.isNotEmpty)
+                  .length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
-                final purchasedItems =
-                    items.where((i) => i.purchaseHistory.isNotEmpty).toList();
+                final purchasedItems = items
+                    .where((i) => i.purchaseHistory.isNotEmpty)
+                    .toList();
                 final item = purchasedItems[index];
                 return PurchaseListItem(
                   item: item,
