@@ -88,9 +88,9 @@ class PurchaseRecord {
       // DB의 'purchase_date' 컬럼이 문자열이라고 가정하고 DateTime
       date: json['purchase_date'] != null
           ? DateTime.parse(json['purchase_date'])
-          : (json['created_at'] != null 
-              ? DateTime.parse(json['created_at']) 
-              : DateTime.now()),
+          : (json['created_at'] != null
+                ? DateTime.parse(json['created_at'])
+                : DateTime.now()),
       price: json['price'] ?? 0,
       store: json['store_name'] ?? '알 수 없음',
     );
@@ -101,10 +101,7 @@ class GroupMember {
   final String name;
   final String avatarColor;
 
-  const GroupMember({
-    required this.name,
-    required this.avatarColor,
-  });
+  const GroupMember({required this.name, required this.avatarColor});
 }
 
 class PriceComparison {

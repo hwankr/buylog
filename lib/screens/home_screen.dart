@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     // [Issue 4] 샘플 데이터 대신 실제 DB 데이터를 가져오도록 수정
-    _fetchDbData(); 
+    _fetchDbData();
   }
 
   // [Issue 4] Supabase에서 product_items와 purchases를 Join하여 가져오는 핵심 함수
@@ -38,7 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .order('created_at', ascending: false);
 
       final List<dynamic> data = response;
-      
+
       setState(() {
         // JSON -> 객체 변환
         _items = data.map((json) => ConsumableItem.fromJson(json)).toList();
@@ -57,118 +57,126 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return SafeArea(
       // [Issue 4] 데이터 로딩 상태에 따른 조건부 렌더링 (로딩 인디케이터 표시)
-      child: _isLoading 
-        ? const Center(child: CircularProgressIndicator()) 
-        : CustomScrollView(
-            slivers: [
-              // Header
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '안녕하세요, 재현님',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '오늘도 스마트한 소비 관리를 시작해볼까요?',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Upcoming Replacements
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 14),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '교체 임박',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      Text(
-                        '${upcoming.where((i) => i.daysRemaining <= 14).length}개',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : CustomScrollView(
+              slivers: [
+                // Header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '안녕하세요, 재현님',
+                          style: Theme.of(context).textTheme.headlineMedium,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 185,
-                  // [Issue 4] DB 데이터 유무에 따른 예외 처리
-                  child: upcoming.isEmpty 
-                    ? const Center(child: Text('등록된 아이템이 없습니다.'))
-                    : ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        itemCount: upcoming.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 12),
-                        itemBuilder: (context, index) {
-                          final item = upcoming[index];
-                          return ItemCard(
-                            item: item,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ItemDetailScreen(item: item),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                ),
-              ),
-
-              // Recent Purchases
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 14),
-                  child: Text(
-                    '최근 구매',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-              ),
-              // [Issue 4] 구매 내역 필터링 및 리스트 렌더링
-              _items.isEmpty 
-                ? const SliverToBoxAdapter(child: Center(child: Text('최근 구매 내역이 없습니다.')))
-                : SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    sliver: SliverList.separated(
-                      itemCount: _items.where((i) => i.purchaseHistory.isNotEmpty).length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final purchasedItems =
-                            _items.where((i) => i.purchaseHistory.isNotEmpty).toList();
-                        final item = purchasedItems[index];
-                        return PurchaseListItem(
-                          item: item,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ItemDetailScreen(item: item),
-                            ),
-                          ),
-                        );
-                      },
+                        const SizedBox(height: 4),
+                        Text(
+                          '오늘도 스마트한 소비 관리를 시작해볼까요?',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
                     ),
                   ),
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
-            ],
-          ),
+                ),
+
+                // Upcoming Replacements
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '교체 임박',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        Text(
+                          '${upcoming.where((i) => i.daysRemaining <= 14).length}개',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 185,
+                    // [Issue 4] DB 데이터 유무에 따른 예외 처리
+                    child: upcoming.isEmpty
+                        ? const Center(child: Text('등록된 아이템이 없습니다.'))
+                        : ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            itemCount: upcoming.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 12),
+                            itemBuilder: (context, index) {
+                              final item = upcoming[index];
+                              return ItemCard(
+                                item: item,
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        ItemDetailScreen(item: item),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ),
+
+                // Recent Purchases
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 14),
+                    child: Text(
+                      '최근 구매',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ),
+                // [Issue 4] 구매 내역 필터링 및 리스트 렌더링
+                _items.isEmpty
+                    ? const SliverToBoxAdapter(
+                        child: Center(child: Text('최근 구매 내역이 없습니다.')),
+                      )
+                    : SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        sliver: SliverList.separated(
+                          itemCount: _items
+                              .where((i) => i.purchaseHistory.isNotEmpty)
+                              .length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final purchasedItems = _items
+                                .where((i) => i.purchaseHistory.isNotEmpty)
+                                .toList();
+                            final item = purchasedItems[index];
+                            return PurchaseListItem(
+                              item: item,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ItemDetailScreen(item: item),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              ],
+            ),
     );
   }
 }

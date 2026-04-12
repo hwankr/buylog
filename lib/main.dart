@@ -8,11 +8,11 @@ import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // [Issue 4] Supabase 연동을 위한 임포트
 
-void main() async{
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Supabase.initialize(
-    url: 'https://fervijwxdgkwjtcpzskx.supabase.co', 
+    url: 'https://fervijwxdgkwjtcpzskx.supabase.co',
     anonKey: 'sb_publishable_FO7WmA_Pu4RsGgsfRJzssQ_f0orCu7w',
   );
 
