@@ -91,7 +91,6 @@ int calcDday({
 	required int predictedCycleDays,
 	required DateTime registeredAt,
 }) {
-
 	final now = DateTime.now();
 	final baseDate = purchaseDates.isEmpty ? registeredAt : purchaseDates.reduce((a, b) => a.isAfter(b) ? a : b);
 	final difference = now.difference(baseDate).inDays;
