@@ -91,7 +91,6 @@ int calcDday({
 	required int predictedCycleDays,
 	required DateTime registeredAt,
 }) {
-	if (purchaseDates.isEmpty && registeredAt == null) return predictedCycleDays;
 
 	final now = DateTime.now();
 	final baseDate = purchaseDates.isEmpty ? registeredAt : purchaseDates.reduce((a, b) => a.isAfter(b) ? a : b);
@@ -118,4 +117,18 @@ double calcRemainingPercent({
 	if (elapsed >= predictedCycleDays) return 1.0;
 
 	return elapsed / predictedCycleDays;
+}
+
+DateTime calculateReplacementDate({
+	required List<DateTime> purchaseDates,
+	required int predictedCycleDays,
+	required DateTime registeredAt,
+}) {
+	if (purchaseDates.isEmpty) {
+		return registeredAt.add(Duration(days: predictedCycleDays));
+	}
+
+	final baseDate = purchaseDates.isEmpty ? registeredAt : purchaseDates.reduce((a, b) => a.isAfter(b) ? a : b);
+
+	return baseDate.add(Duration(days: predictedCycleDays));
 }
