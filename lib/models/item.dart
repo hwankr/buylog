@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/ai/prediction_service.dart';
 
 class ConsumableItem {
   final String id;
@@ -36,35 +37,50 @@ class ConsumableItem {
         .map((p) => PurchaseRecord.fromJson(p as Map<String, dynamic>))
         .toList();
 
-    // DB에서 주기 가져오기 (없으면 기본 30일)
-    final int cycle = json['replacement_cycle_days'] ?? 30;
+    // 구매 날짜 리스트 추출
+    List<DateTime> purchaseDates = history.map((p) => p.date).toList();
 
-    int calculatedDays;
-    double progress;
+    // DB에서 기본 주기 및 등록일 가져오기
+    final int defaultCycle = json['replacement_cycle_days'] ?? 30;
+    // 등록일이 없으면 현재 시간으로 처리
+    final DateTime registeredAt = json['created_at'] != null
+        ? DateTime.parse(json['created_at'])
+        : DateTime.now();
 
-    if (history.isNotEmpty) {
-      // 최근 구매일 기준 D-Day 계산 로직
-      final lastPurchase = history.first.date;
-      final nextReplacement = lastPurchase.add(Duration(days: cycle));
-      calculatedDays = nextReplacement.difference(DateTime.now()).inDays;
+    final prediction = predictCycle(
+      purchaseDates: purchaseDates,
+      categoryDefaultDays: defaultCycle,
+    );
 
-      // 잔량 게이지 계산 (남은날짜 / 전체주기)
-      progress = (calculatedDays / cycle).clamp(0.0, 1.0);
-    } else {
-      // 구매 기록 없으면 새 제품으로 간주
-      calculatedDays = cycle;
-      progress = 1.0;
-    }
+    // 예측 주기를 바탕으로 D-Day 계산
+    final int calculatedDays = calcDday(
+      purchaseDates: purchaseDates,
+      predictedCycleDays: prediction.predictedCycleDays,
+      registeredAt: registeredAt,
+    );
+
+    // 잔여량
+    final double progress = calcRemainingPercent(
+      purchaseDates: purchaseDates,
+      predictedCycleDays: prediction.predictedCycleDays,
+      registeredAt: registeredAt,
+    );
 
     return ConsumableItem(
       id: json['id'].toString(),
       name: json['name'] ?? '이름 없음',
       brand: json['brand'] ?? '브랜드 없음',
-      category: '기타', // 나중에 category_id로 이름 가져오는 로직 추가 가능
+      category: '기타',
       icon: Icons.inventory_2_outlined,
+
       daysRemaining: calculatedDays,
-      cycleDays: cycle,
+      cycleDays: prediction.predictedCycleDays,
       progress: progress,
+
+      // Phase에 따른 정밀한 예측일수와 신뢰도 반영
+      aiPredictedDays: prediction.predictedCycleDays,
+      aiConfidence: prediction.confidence,
+
       imageUrl: json['image_url'],
       purchaseHistory: history,
     );
@@ -76,7 +92,7 @@ class PurchaseRecord {
   final int price; // 구매 가격
   final String store; // 구매처
 
-  PurchaseRecord({
+  const PurchaseRecord({
     required this.date,
     required this.price,
     required this.store,
@@ -85,7 +101,6 @@ class PurchaseRecord {
   // JSON -> PurchaseRecord 객체 변환
   factory PurchaseRecord.fromJson(Map<String, dynamic> json) {
     return PurchaseRecord(
-      // DB의 'purchase_date' 컬럼이 문자열이라고 가정하고 DateTime
       date: json['purchase_date'] != null
           ? DateTime.parse(json['purchase_date'])
           : (json['created_at'] != null
