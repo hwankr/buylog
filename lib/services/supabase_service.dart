@@ -6,20 +6,23 @@ import '../models/item.dart';
 /// Supabase 연동 서비스
 ///
 /// 프로젝트: fervijwxdgkwjtcpzskx
-/// 테이블 구조:
-///   product_items  ← 제품 (ConsumableItem)
-///   purchases      ← 구매 이력 (PurchaseRecord)
-///   categories     ← 카테고리 (이름 → UUID 캐시)
-///   ai_predictions ← AI 예측 (aiPredictedDays, aiConfidence)
-///
-/// 인증: 익명 로그인(signInAnonymously) 사용
-/// RLS: user_id = auth.uid() 정책이 각 테이블에 설정되어 있어야 합니다.
+/// 테이블: product_items / purchases / categories / ai_predictions
+/// Storage: product-images 버킷 (공개)
 class SupabaseService {
   static const _supabaseUrl = 'https://fervijwxdgkwjtcpzskx.supabase.co';
   static const _anonKey =
       'sb_publishable_FO7WmA_Pu4RsGgsfRJzssQ_f0orCu7w';
+  // flutter run 시 --dart-define=SUPABASE_SERVICE_KEY=sb_secret_... 로 주입
+  static const _serviceKey =
+      String.fromEnvironment('SUPABASE_SERVICE_KEY');
+  static const _storageBucket = 'product-images';
 
   static SupabaseClient get _db => Supabase.instance.client;
+
+  /// Storage 업로드 전용 어드민 클라이언트 (service role — RLS 우회)
+  ///
+  /// ⚠️ 프로덕션에서는 서버사이드(Edge Function 등)에서만 사용해야 합니다.
+  static final _adminClient = SupabaseClient(_supabaseUrl, _serviceKey);
 
   /// 카테고리 이름 → UUID 로컬 캐시 (앱 세션 동안 유지)
   static final Map<String, String> _categoryCache = {};
@@ -29,18 +32,48 @@ class SupabaseService {
   // ────────────────────────────────────────────────────────────────────────────
 
   /// 개발용 임시 사용자 ID (RLS 비활성 환경에서 사용)
-  ///
-  /// 실제 인증 연동 시 _db.auth.currentUser!.id 로 교체합니다.
   static const _devUserId = '08cccfe3-766f-43bd-b06c-8d909e0f9fe8';
 
-  /// Supabase 초기화 (인증 불필요 — RLS 비활성 환경)
+  /// Supabase 초기화
   static Future<void> initialize() async {
     await Supabase.initialize(url: _supabaseUrl, anonKey: _anonKey);
-    debugPrint('[Supabase] 초기화 완료 (인증 없음, RLS 비활성 모드)');
+    debugPrint('[Supabase] 초기화 완료');
   }
 
   /// 현재 사용자 ID
   static String get currentUserId => _devUserId;
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // 이미지 업로드
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /// 제품 이미지를 Storage에 업로드하고 공개 URL을 반환합니다.
+  ///
+  /// [imageBytes] 업로드할 이미지 바이트 (image_picker로 획득)
+  /// [itemId]     제품 UUID (파일 경로에 사용)
+  static Future<String?> uploadItemImage({
+    required Uint8List imageBytes,
+    required String itemId,
+  }) async {
+    try {
+      final path = 'items/$itemId.jpg';
+      await _adminClient.storage.from(_storageBucket).uploadBinary(
+        path,
+        imageBytes,
+        fileOptions: const FileOptions(
+          contentType: 'image/jpeg',
+          upsert: true,
+        ),
+      );
+      final url =
+          _adminClient.storage.from(_storageBucket).getPublicUrl(path);
+      debugPrint('[Supabase] 이미지 업로드 완료: $url');
+      return url;
+    } catch (e) {
+      debugPrint('[Supabase] 이미지 업로드 오류: $e');
+      return null;
+    }
+  }
 
   // ────────────────────────────────────────────────────────────────────────────
   // 제품 목록 로드

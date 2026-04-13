@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/item.dart';
 import '../services/ai/category_defaults.dart';
 import '../services/supabase_service.dart';
@@ -54,9 +55,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
   // 구매 이력 목록
   final List<_PurchaseEntry> _purchases = [];
 
-  // 이미지 업로드 stub용 상태값 (실제 bytes는 image_picker 연동 후 사용)
-  bool _hasImageSelected = false;
+  // 이미지 상태
+  Uint8List? _imageBytes;   // 새로 선택한 이미지 bytes
   bool _isSaving = false;
+
+  bool get _hasImageSelected => _imageBytes != null || (_isEditing && widget.editItem!.imageUrl != null);
 
   bool get _isEditing => widget.editItem != null;
 
@@ -75,7 +78,6 @@ class _AddItemScreenState extends State<AddItemScreen> {
           ? edit.category
           : categoryDefaultDays.keys.first;
       _cycleDaysCtrl = TextEditingController(text: edit.cycleDays.toString());
-      _hasImageSelected = edit.imageUrl != null;
       for (final r in edit.purchaseHistory) {
         _purchases.add(
           _PurchaseEntry(
@@ -178,31 +180,19 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // 이미지 선택 (Stub)
-  //
-  // TODO: 실제 이미지 선택을 위해 아래 패키지 추가 필요 (pubspec.yaml):
-  //   image_picker: ^1.x.x
-  //
-  // 연동 방법:
-  //   import 'package:image_picker/image_picker.dart';
-  //   import 'package:flutter/foundation.dart' show kIsWeb;
-  //
-  //   final picker = ImagePicker();
-  //   final xFile = await picker.pickImage(source: ImageSource.gallery);
-  //   if (xFile == null) return;
-  //   final bytes = await xFile.readAsBytes();
-  //   setState(() { _imageBytes = bytes; _hasImageSelected = true; });
+  // 이미지 선택 (image_picker — 웹/모바일 공통)
   // ---------------------------------------------------------------------------
-  void _pickImage() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('이미지 선택: image_picker 패키지 연동 후 사용 가능합니다.'),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2),
-      ),
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final xFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 85,
     );
-    // 시각적 피드백을 위한 stub 상태 업데이트
-    setState(() => _hasImageSelected = true);
+    if (xFile == null) return;
+    final bytes = await xFile.readAsBytes();
+    setState(() => _imageBytes = bytes);
   }
 
   // ---------------------------------------------------------------------------
@@ -218,12 +208,14 @@ class _AddItemScreenState extends State<AddItemScreen> {
           ? widget.editItem!.id
           : SupabaseService.generateUuid();
 
-      // TODO: Supabase Storage 이미지 업로드
-      // image_picker로 bytes를 받은 뒤 아래 코드로 업로드:
-      //   final path = 'item_images/$itemId.jpg';
-      //   await SupabaseService._db.storage.from('items').uploadBinary(path, bytes);
-      //   imageUrl = SupabaseService._db.storage.from('items').getPublicUrl(path);
-      final String? imageUrl = _isEditing ? widget.editItem!.imageUrl : null;
+      // 새로 선택한 이미지가 있으면 Supabase Storage에 업로드
+      String? imageUrl = _isEditing ? widget.editItem!.imageUrl : null;
+      if (_imageBytes != null) {
+        imageUrl = await SupabaseService.uploadItemImage(
+          imageBytes: _imageBytes!,
+          itemId: itemId,
+        );
+      }
 
       final purchases = _purchases
           .where((e) => e.priceCtrl.text.trim().isNotEmpty)
@@ -407,11 +399,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
   // ---------------------------------------------------------------------------
 
   Widget _buildImagePicker() {
+    // 표시 우선순위: 새로 선택한 bytes > 기존 URL > 빈 상태
+    final existingUrl = _isEditing ? widget.editItem!.imageUrl : null;
+
     return GestureDetector(
       onTap: _pickImage,
       child: Container(
-        height: 120,
+        height: 160,
         width: double.infinity,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: _hasImageSelected ? AppColors.primaryLight2 : AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(14),
@@ -419,55 +415,75 @@ class _AddItemScreenState extends State<AddItemScreen> {
             color: _hasImageSelected ? AppColors.primary : AppColors.border,
           ),
         ),
-        child: _hasImageSelected
-            ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+        child: _imageBytes != null
+            // 새로 선택한 이미지 프리뷰
+            ? Stack(
+                fit: StackFit.expand,
                 children: [
-                  const Icon(
-                    Icons.check_circle_outline,
-                    size: 32,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '이미지 선택됨',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w500,
+                  Image.memory(_imageBytes!, fit: BoxFit.cover),
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      color: Colors.black45,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: const Text(
+                        '탭하여 변경',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.white),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    '탭하여 변경',
-                    style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                   ),
                 ],
               )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.add_photo_alternate_outlined,
-                    size: 32,
-                    color: AppColors.textMuted,
+            : existingUrl != null
+                // 기존 등록된 이미지 URL 프리뷰
+                ? Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(existingUrl, fit: BoxFit.cover),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          color: Colors.black45,
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: const Text(
+                            '탭하여 변경',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                // 미선택 상태
+                : const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 36,
+                        color: AppColors.textMuted,
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        '제품 이미지 선택',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        '탭하여 갤러리에서 선택 (선택 사항)',
+                        style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '제품 이미지 선택',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    '탭하여 갤러리에서 선택 (선택 사항)',
-                    style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-                  ),
-                ],
-              ),
       ),
     );
   }

@@ -40,6 +40,7 @@ dependencies:
   google_fonts: ^8.0.2
   percent_indicator: ^4.2.5
   supabase_flutter: ^2.8.4
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:
