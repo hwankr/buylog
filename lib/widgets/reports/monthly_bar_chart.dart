@@ -74,7 +74,18 @@ class MonthlyBarChart extends StatelessWidget {
           barTouchData: BarTouchData(
             enabled: true,
             touchCallback: (event, response) {
-              if (!event.isInterestedForInteractions) return;
+              // fl_chart 1.2.0 은 desktop/web 에서 한 번의 탭에 FlTapDownEvent +
+              // FlTapUpEvent 둘 다 emit 한다. 본 차트는 CustomScrollView 안에
+              // 배치되므로 TapDown 에서 커밋하면 사용자가 세로 스크롤을 시작한
+              // 경우에도 토글이 발사된다 (gesture arena 가 pan 으로 승격되면
+              // FlTapCancelEvent 가 뒤따르지만 이미 setState 는 호출된 후).
+              // 따라서 committed tap 인 FlTapUpEvent 만 통과시킨다.
+              // render_base_chart.dart:94-96 기준 TapUp 은 모든 플랫폼에서
+              // 1회만 emit 되므로 단일 발화 보장 (데스크톱 이중 발화 회피는
+              // 이 가드가 TapDown 을 차단하는 것으로 자동 해결).
+              // 스크롤/드래그 취소 시에는 TapUp 대신 FlTapCancelEvent 가
+              // 와서 이 가드에서 무시된다.
+              if (event is! FlTapUpEvent) return;
               if (response == null || response.spot == null) return;
               final index = response.spot!.touchedBarGroupIndex;
               if (index < 0 || index >= data.length) return;
