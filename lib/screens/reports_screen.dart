@@ -1,26 +1,15 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+
+import '../data/sample_data.dart';
+import '../services/report_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/reports/category_pie_chart.dart';
+import '../widgets/reports/month_filter_list_view.dart';
+import '../widgets/reports/monthly_bar_chart.dart';
+import '../widgets/reports/share_action_button.dart';
 
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
-
-  static const _categories = [
-    {'name': '위생', 'amount': 42500, 'color': Color(0xFF0891B2), 'percent': 31},
-    {'name': '필터', 'amount': 35000, 'color': Color(0xFF059669), 'percent': 25},
-    {'name': '세탁', 'amount': 32400, 'color': Color(0xFFD97706), 'percent': 23},
-    {'name': '주방', 'amount': 18700, 'color': Color(0xFF7C3AED), 'percent': 14},
-    {'name': '기타', 'amount': 9800, 'color': Color(0xFFEC4899), 'percent': 7},
-  ];
-
-  static const _monthlyData = [
-    {'month': '11월', 'amount': 125000},
-    {'month': '12월', 'amount': 98000},
-    {'month': '1월', 'amount': 142000},
-    {'month': '2월', 'amount': 110000},
-    {'month': '3월', 'amount': 138400},
-    {'month': '4월', 'amount': 85000},
-  ];
 
   String _formatPrice(int price) {
     final str = price.toString();
@@ -34,15 +23,38 @@ class ReportsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final service = ReportService.fromItems(SampleData.items);
+    final months = service.aggregateRecentMonths();
+    // 요약/파이/상세는 지출이 있는 최신 월을 우선 사용해 "빈 현재 월 → 0원"
+    // UX 회귀를 피한다. 전부 0원이면 months.last로 fallback.
+    final latest =
+        service.latestMonthlyWithSpending() ??
+        (months.isEmpty ? null : months.last);
+    final breakdown = latest == null
+        ? <CategoryBreakdown>[]
+        : service.categoryBreakdownFor(latest.month);
+
+    final latestTitle = latest == null
+        ? '지출 현황'
+        : '${latest.month.month}월 지출 현황';
+    final latestYear = latest == null ? '-' : '${latest.month.year}';
+    final latestTotal = latest?.totalAmount ?? 0;
+
     return SafeArea(
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Text(
-                '리포트',
-                style: Theme.of(context).textTheme.headlineMedium,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '리포트',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  ShareActionButton(service: service),
+                ],
               ),
             ),
           ),
@@ -61,20 +73,20 @@ class ReportsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '4월 지출 현황',
-                          style: TextStyle(
+                          latestTitle,
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: AppColors.text,
                           ),
                         ),
                         Text(
-                          '2026',
-                          style: TextStyle(
+                          latestYear,
+                          style: const TextStyle(
                             fontSize: 13,
                             color: AppColors.textMuted,
                           ),
@@ -83,7 +95,7 @@ class ReportsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      _formatPrice(138400),
+                      _formatPrice(latestTotal),
                       style: const TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w700,
@@ -93,71 +105,7 @@ class ReportsScreen extends StatelessWidget {
                     const SizedBox(height: 24),
 
                     // Donut chart
-                    SizedBox(
-                      height: 200,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: PieChart(
-                              PieChartData(
-                                sectionsSpace: 2,
-                                centerSpaceRadius: 45,
-                                sections: _categories.map((c) {
-                                  return PieChartSectionData(
-                                    value: (c['percent'] as int).toDouble(),
-                                    color: c['color'] as Color,
-                                    radius: 35,
-                                    showTitle: false,
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: _categories.map((c) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: BoxDecoration(
-                                        color: c['color'] as Color,
-                                        borderRadius: BorderRadius.circular(3),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    SizedBox(
-                                      width: 35,
-                                      child: Text(
-                                        c['name'] as String,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${c['percent']}%',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.text,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ),
-                    ),
+                    CategoryPieChart(data: breakdown),
                   ],
                 ),
               ),
@@ -247,79 +195,7 @@ class ReportsScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    SizedBox(
-                      height: 180,
-                      child: BarChart(
-                        BarChartData(
-                          alignment: BarChartAlignment.spaceAround,
-                          maxY: 160000,
-                          gridData: FlGridData(
-                            show: true,
-                            drawVerticalLine: false,
-                            horizontalInterval: 50000,
-                            getDrawingHorizontalLine: (value) => FlLine(
-                              color: AppColors.border,
-                              strokeWidth: 0.5,
-                            ),
-                          ),
-                          borderData: FlBorderData(show: false),
-                          titlesData: FlTitlesData(
-                            topTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            rightTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            leftTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                getTitlesWidget: (value, meta) {
-                                  if (value.toInt() >= 0 &&
-                                      value.toInt() < _monthlyData.length) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 8),
-                                      child: Text(
-                                        _monthlyData[value.toInt()]['month']
-                                            as String,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.textMuted,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                  return const SizedBox.shrink();
-                                },
-                              ),
-                            ),
-                          ),
-                          barGroups: _monthlyData.asMap().entries.map((entry) {
-                            final isLatest =
-                                entry.key == _monthlyData.length - 1;
-                            return BarChartGroupData(
-                              x: entry.key,
-                              barRods: [
-                                BarChartRodData(
-                                  toY: (entry.value['amount'] as int)
-                                      .toDouble(),
-                                  width: 28,
-                                  color: isLatest
-                                      ? AppColors.primary
-                                      : AppColors.primary.withOpacity(0.3),
-                                  borderRadius: const BorderRadius.only(
-                                    topLeft: Radius.circular(6),
-                                    topRight: Radius.circular(6),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
+                    MonthlyBarChart(data: months),
                   ],
                 ),
               ),
@@ -343,10 +219,12 @@ class ReportsScreen extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             sliver: SliverList.separated(
-              itemCount: _categories.length,
+              itemCount: breakdown.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
-                final c = _categories[index];
+                final c = breakdown[index];
+                final color = colorForCategory(c.category);
+                final percent = (c.ratio * 100).round();
                 return Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -363,7 +241,7 @@ class ReportsScreen extends StatelessWidget {
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(
-                          color: (c['color'] as Color).withOpacity(0.12),
+                          color: color.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Center(
@@ -371,7 +249,7 @@ class ReportsScreen extends StatelessWidget {
                             width: 12,
                             height: 12,
                             decoration: BoxDecoration(
-                              color: c['color'] as Color,
+                              color: color,
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -383,7 +261,7 @@ class ReportsScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              c['name'] as String,
+                              c.category,
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
@@ -394,11 +272,11 @@ class ReportsScreen extends StatelessWidget {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(3),
                               child: LinearProgressIndicator(
-                                value: (c['percent'] as int) / 100,
+                                value: c.ratio,
                                 minHeight: 4,
                                 backgroundColor: AppColors.border,
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                  c['color'] as Color,
+                                  color,
                                 ),
                               ),
                             ),
@@ -410,7 +288,7 @@ class ReportsScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            _formatPrice(c['amount'] as int),
+                            _formatPrice(c.amount),
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -418,7 +296,7 @@ class ReportsScreen extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            '${c['percent']}%',
+                            '$percent%',
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.textMuted,
@@ -431,6 +309,9 @@ class ReportsScreen extends StatelessWidget {
                 );
               },
             ),
+          ),
+          SliverToBoxAdapter(
+            child: MonthFilterListView(selectedMonth: null, service: service),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
