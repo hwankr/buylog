@@ -135,65 +135,105 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Widget _buildProductHeader() {
+    final hasImage = _item.imageUrl != null && _item.imageUrl!.isNotEmpty;
+
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border, width: 0.5),
       ),
-      child: Row(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight2,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(_item.icon, color: AppColors.primary, size: 32),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
+          // 이미지 배너 (imageUrl이 있을 때만)
+          if (hasImage)
+            SizedBox(
+              width: double.infinity,
+              height: 220,
+              child: Image.network(
+                _item.imageUrl!,
+                fit: BoxFit.cover,
+                loadingBuilder: (_, child, progress) {
+                  if (progress == null) return child;
+                  return Container(
                     color: AppColors.primaryLight2,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    _item.category,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
+                  );
+                },
+                errorBuilder: (_, error, stack) => Container(
+                  color: AppColors.primaryLight2,
+                  child: const Center(
+                    child: Icon(Icons.broken_image_outlined,
+                        size: 48, color: AppColors.textMuted),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  _item.name,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.text,
+              ),
+            ),
+          // 제품 정보 행
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                if (!hasImage)
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight2,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(_item.icon, color: AppColors.primary, size: 32),
+                  ),
+                if (!hasImage) const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight2,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _item.category,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _item.name,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.text,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _item.brand,
+                        style: const TextStyle(
+                            fontSize: 14, color: AppColors.textMuted),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  _item.brand,
-                  style: const TextStyle(fontSize: 14, color: AppColors.textMuted),
+                CountdownRing(
+                  daysRemaining: _item.daysRemaining,
+                  totalDays: _item.cycleDays,
+                  size: 100,
                 ),
               ],
             ),
-          ),
-          CountdownRing(
-            daysRemaining: _item.daysRemaining,
-            totalDays: _item.cycleDays,
-            size: 100,
           ),
         ],
       ),
