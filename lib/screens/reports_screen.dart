@@ -8,8 +8,33 @@ import '../widgets/reports/month_filter_list_view.dart';
 import '../widgets/reports/monthly_bar_chart.dart';
 import '../widgets/reports/share_action_button.dart';
 
-class ReportsScreen extends StatelessWidget {
+class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
+
+  @override
+  State<ReportsScreen> createState() => _ReportsScreenState();
+}
+
+class _ReportsScreenState extends State<ReportsScreen> {
+  // _selectedMonth 만 state 로 보유한다. ReportService/집계는 build 마다
+  // 재계산한다.
+  //
+  // 이유: ReportsScreen 은 main.dart:63 의 IndexedStack 에 상주해 앱 수명
+  // 동안 마운트 유지된다. initState + late final 캐싱을 쓰면 월 경계 교차 시
+  // 구 월 윈도우가, 향후 Supabase write 시 stale 데이터가 화면에 박혀
+  // ReportsScreen 이 destroy 되기 전에는 갱신되지 않는 회귀가 발생한다
+  // (Codex adversarial review Finding 2).
+  //
+  // 비용: SampleData 규모 (~6 items × ~2 purchases × 6 buckets ≈ 100 ops)
+  // 는 16ms 프레임 예산 대비 무시 가능. async ReportService 도입 시
+  // 캐싱은 repository 레이어로 이전한다.
+  DateTime? _selectedMonth;
+
+  void _onMonthTap(DateTime m) {
+    setState(() {
+      _selectedMonth = _selectedMonth == m ? null : m;
+    });
+  }
 
   String _formatPrice(int price) {
     final str = price.toString();
@@ -31,8 +56,18 @@ class ReportsScreen extends StatelessWidget {
         service.latestMonthlyWithSpending() ??
         (months.isEmpty ? null : months.last);
     final breakdown = latest == null
-        ? <CategoryBreakdown>[]
+        ? const <CategoryBreakdown>[]
         : service.categoryBreakdownFor(latest.month);
+
+    // `_selectedMonth`는 순수 widget state 로 보관되므로 IndexedStack 하에서
+    // 앱 수명만큼 유지된다. 월 경계 교차 또는 데이터 동기화로 aggregateRecentMonths
+    // 결과가 바뀌면 선택 월이 현재 window 밖으로 밀려 "헤더만 떠 있고 바 차트에는
+    // 해당 월이 없는" 모순 상태가 발생할 수 있다 (Codex review v3.2 HIGH finding).
+    // 매 build 에서 months 와 교차 검증하여 유효 월만 하위 위젯으로 내려보낸다.
+    final effectiveSelectedMonth =
+        _selectedMonth != null && months.any((m) => m.month == _selectedMonth)
+        ? _selectedMonth
+        : null;
 
     final latestTitle = latest == null
         ? '지출 현황'
@@ -195,7 +230,11 @@ class ReportsScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    MonthlyBarChart(data: months),
+                    MonthlyBarChart(
+                      data: months,
+                      selectedMonth: effectiveSelectedMonth,
+                      onMonthTap: _onMonthTap,
+                    ),
                   ],
                 ),
               ),
@@ -311,7 +350,10 @@ class ReportsScreen extends StatelessWidget {
             ),
           ),
           SliverToBoxAdapter(
-            child: MonthFilterListView(selectedMonth: null, service: service),
+            child: MonthFilterListView(
+              selectedMonth: effectiveSelectedMonth,
+              service: service,
+            ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
