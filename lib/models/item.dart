@@ -28,14 +28,78 @@ class ConsumableItem {
     this.purchaseHistory = const [],
     this.imageUrl,
   });
+
+  /// Supabase product_items 행 + 관련 데이터로 ConsumableItem 생성
+  ///
+  /// [data]         product_items 행
+  /// [categoryName] categories.name (FK join)
+  /// [purchases]    purchases 행 목록 (FK join)
+  /// [aiPrediction] ai_predictions 최신 행 (nullable)
+  factory ConsumableItem.fromSupabase({
+    required Map<String, dynamic> data,
+    required String categoryName,
+    required List<Map<String, dynamic>> purchases,
+    Map<String, dynamic>? aiPrediction,
+  }) {
+    final cycleDays = (data['replacement_cycle_days'] as int?) ?? 30;
+
+    // 구매일 내림차순 정렬
+    final sorted = List<Map<String, dynamic>>.from(purchases)
+      ..sort((a, b) => DateTime.parse(b['purchase_date'])
+          .compareTo(DateTime.parse(a['purchase_date'])));
+
+    final lastDate = sorted.isNotEmpty
+        ? DateTime.parse(sorted.first['purchase_date'])
+        : null;
+
+    final daysSince = lastDate != null
+        ? DateTime.now().difference(lastDate).inDays
+        : cycleDays;
+
+    return ConsumableItem(
+      id: data['id'] as String,
+      name: data['name'] as String? ?? '',
+      brand: data['brand'] as String? ?? '',
+      category: categoryName,
+      icon: iconForCategory(categoryName),
+      daysRemaining: cycleDays - daysSince,
+      cycleDays: cycleDays,
+      progress: (daysSince / cycleDays).clamp(0.0, 1.0),
+      imageUrl: data['image_url'] as String?,
+      aiPredictedDays: aiPrediction?['predicted_cycle_days'] as int?,
+      aiConfidence: (aiPrediction?['confidence'] as num?)?.toDouble(),
+      purchaseHistory: sorted
+          .map((p) => PurchaseRecord(
+                id: p['id'] as String?,
+                date: DateTime.parse(p['purchase_date']),
+                price: (p['price'] as int?) ?? 0,
+                store: (p['store_name'] as String?) ?? '',
+              ))
+          .toList(),
+    );
+  }
+
+  static IconData iconForCategory(String category) {
+    return switch (category) {
+      '욕실/위생' => Icons.bathroom_outlined,
+      '주방/세제' => Icons.kitchen_outlined,
+      '세탁/청소' => Icons.local_laundry_service_outlined,
+      '헤어/바디' => Icons.shower_outlined,
+      '가전/필터' => Icons.air_outlined,
+      _ => Icons.category_outlined,
+    };
+  }
 }
 
 class PurchaseRecord {
+  /// Supabase purchases.id (신규 이력은 null — 저장 후 채워짐)
+  final String? id;
   final DateTime date;
   final int price;
   final String store;
 
   const PurchaseRecord({
+    this.id,
     required this.date,
     required this.price,
     required this.store,

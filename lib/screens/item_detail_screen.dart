@@ -77,7 +77,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     );
 
     if (confirmed == true) {
-      ItemStore.instance.delete(_item.id);
+      await ItemStore.instance.delete(_item.id);
       // _onStoreChanged가 자동으로 pop 처리
     }
   }

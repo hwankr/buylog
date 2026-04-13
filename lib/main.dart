@@ -8,15 +8,25 @@ import 'screens/scan_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/add_item_screen.dart';
+import 'services/supabase_service.dart';
+import 'services/item_store.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
     ),
   );
+
+  // Supabase 초기화 (익명 로그인 포함)
+  await SupabaseService.initialize();
+
+  // 제품 목록 초기 로드
+  await ItemStore.instance.initialize();
+
   runApp(const BuylogApp());
 }
 

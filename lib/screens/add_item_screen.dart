@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/item.dart';
 import '../services/ai/category_defaults.dart';
-import '../services/firebase_service.dart';
+import '../services/supabase_service.dart';
 import '../services/item_store.dart';
 import '../theme/app_theme.dart';
 
@@ -44,7 +44,6 @@ class AddItemScreen extends StatefulWidget {
 
 class _AddItemScreenState extends State<AddItemScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _firebaseService = FirebaseService();
 
   // 기본 정보 컨트롤러
   late final TextEditingController _nameCtrl;
@@ -214,20 +213,17 @@ class _AddItemScreenState extends State<AddItemScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // 편집 모드면 기존 id 유지, 신규면 타임스탬프 id 생성
+      // 편집 모드면 기존 id 유지, 신규면 Supabase용 UUID 생성
       final itemId = _isEditing
           ? widget.editItem!.id
-          : DateTime.now().millisecondsSinceEpoch.toString();
+          : SupabaseService.generateUuid();
 
-      // 4번: Firebase Storage 이미지 업로드 (stub)
-      // _hasImageSelected는 실제 연동 시 _imageBytes != null 로 교체
-      String? imageUrl = _isEditing ? widget.editItem!.imageUrl : null;
-      if (_hasImageSelected && imageUrl == null) {
-        imageUrl = await _firebaseService.uploadItemImage(
-          imageBytes: Uint8List(0), // TODO: 실제 bytes로 교체
-          itemId: itemId,
-        );
-      }
+      // TODO: Supabase Storage 이미지 업로드
+      // image_picker로 bytes를 받은 뒤 아래 코드로 업로드:
+      //   final path = 'item_images/$itemId.jpg';
+      //   await SupabaseService._db.storage.from('items').uploadBinary(path, bytes);
+      //   imageUrl = SupabaseService._db.storage.from('items').getPublicUrl(path);
+      final String? imageUrl = _isEditing ? widget.editItem!.imageUrl : null;
 
       final purchases = _purchases
           .where((e) => e.priceCtrl.text.trim().isNotEmpty)
@@ -246,6 +242,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
       final cycleDays =
           int.tryParse(_cycleDaysCtrl.text) ?? getDefaultDays(_selectedCategory);
 
+      // 편집 시 기존 purchases (id 있음) + 새 purchases (id 없음) 합치기
+      final existingPurchases = _isEditing
+          ? widget.editItem!.purchaseHistory
+              .where((r) => r.id != null)
+              .toList()
+          : <PurchaseRecord>[];
+
       final item = ConsumableItem(
         id: itemId,
         name: _nameCtrl.text.trim(),
@@ -258,15 +261,14 @@ class _AddItemScreenState extends State<AddItemScreen> {
         aiPredictedDays: _isEditing ? widget.editItem!.aiPredictedDays : null,
         aiConfidence: _isEditing ? widget.editItem!.aiConfidence : null,
         imageUrl: imageUrl,
-        purchaseHistory: purchases,
+        purchaseHistory: [...existingPurchases, ...purchases],
       );
 
-      // 5번: Firestore 저장 (stub) + 인메모리 스토어 반영
-      await _firebaseService.saveItem(item);
+      // Supabase 저장 + 인메모리 스토어 반영
       if (_isEditing) {
-        ItemStore.instance.update(item);
+        await ItemStore.instance.update(item);
       } else {
-        ItemStore.instance.add(item);
+        await ItemStore.instance.add(item);
       }
 
       if (mounted) {
