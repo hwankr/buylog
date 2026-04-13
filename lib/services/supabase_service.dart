@@ -10,11 +10,9 @@ import '../models/item.dart';
 /// Storage: product-images 버킷 (공개)
 class SupabaseService {
   static const _supabaseUrl = 'https://fervijwxdgkwjtcpzskx.supabase.co';
-  static const _anonKey =
-      'sb_publishable_FO7WmA_Pu4RsGgsfRJzssQ_f0orCu7w';
+  static const _anonKey = 'sb_publishable_FO7WmA_Pu4RsGgsfRJzssQ_f0orCu7w';
   // flutter run 시 --dart-define=SUPABASE_SERVICE_KEY=sb_secret_... 로 주입
-  static const _serviceKey =
-      String.fromEnvironment('SUPABASE_SERVICE_KEY');
+  static const _serviceKey = String.fromEnvironment('SUPABASE_SERVICE_KEY');
   static const _storageBucket = 'product-images';
 
   static SupabaseClient get _db => Supabase.instance.client;
@@ -57,16 +55,17 @@ class SupabaseService {
   }) async {
     try {
       final path = 'items/$itemId.jpg';
-      await _adminClient.storage.from(_storageBucket).uploadBinary(
-        path,
-        imageBytes,
-        fileOptions: const FileOptions(
-          contentType: 'image/jpeg',
-          upsert: true,
-        ),
-      );
-      final url =
-          _adminClient.storage.from(_storageBucket).getPublicUrl(path);
+      await _adminClient.storage
+          .from(_storageBucket)
+          .uploadBinary(
+            path,
+            imageBytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              upsert: true,
+            ),
+          );
+      final url = _adminClient.storage.from(_storageBucket).getPublicUrl(path);
       debugPrint('[Supabase] 이미지 업로드 완료: $url');
       return url;
     } catch (e) {
@@ -83,7 +82,9 @@ class SupabaseService {
   static Future<List<ConsumableItem>> loadItems() async {
     final uid = currentUserId;
     try {
-      final rows = await _db.from('product_items').select('''
+      final rows = await _db
+          .from('product_items')
+          .select('''
           id,
           name,
           brand,
@@ -93,23 +94,24 @@ class SupabaseService {
           categories ( id, name ),
           purchases ( id, purchase_date, price, store_name ),
           ai_predictions ( predicted_cycle_days, confidence )
-        ''').eq('user_id', uid).order('created_at', ascending: false);
+        ''')
+          .eq('user_id', uid)
+          .order('created_at', ascending: false);
 
       return rows.map<ConsumableItem>((row) {
         final categoryName =
-            (row['categories'] as Map<String, dynamic>?)?['name']
-                    as String? ??
-                '기타';
+            (row['categories'] as Map<String, dynamic>?)?['name'] as String? ??
+            '기타';
 
         final purchases =
             (row['purchases'] as List<dynamic>?)
-                    ?.cast<Map<String, dynamic>>() ??
-                [];
+                ?.cast<Map<String, dynamic>>() ??
+            [];
 
         final aiList =
             (row['ai_predictions'] as List<dynamic>?)
-                    ?.cast<Map<String, dynamic>>() ??
-                [];
+                ?.cast<Map<String, dynamic>>() ??
+            [];
         // 가장 최근 AI 예측 1건 사용
         final ai = aiList.isNotEmpty ? aiList.last : null;
 
@@ -239,8 +241,7 @@ class SupabaseService {
     final bytes = List<int>.generate(16, (_) => random.nextInt(256));
     bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
     bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant bits
-    final hex =
-        bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
         '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
         '${hex.substring(20)}';

@@ -45,8 +45,11 @@ class ConsumableItem {
 
     // 구매일 내림차순 정렬
     final sorted = List<Map<String, dynamic>>.from(purchases)
-      ..sort((a, b) => DateTime.parse(b['purchase_date'])
-          .compareTo(DateTime.parse(a['purchase_date'])));
+      ..sort(
+        (a, b) => DateTime.parse(
+          b['purchase_date'],
+        ).compareTo(DateTime.parse(a['purchase_date'])),
+      );
 
     final lastDate = sorted.isNotEmpty
         ? DateTime.parse(sorted.first['purchase_date'])
@@ -69,13 +72,28 @@ class ConsumableItem {
       aiPredictedDays: aiPrediction?['predicted_cycle_days'] as int?,
       aiConfidence: (aiPrediction?['confidence'] as num?)?.toDouble(),
       purchaseHistory: sorted
-          .map((p) => PurchaseRecord(
-                id: p['id'] as String?,
-                date: DateTime.parse(p['purchase_date']),
-                price: (p['price'] as int?) ?? 0,
-                store: (p['store_name'] as String?) ?? '',
-              ))
+          .map(
+            (p) => PurchaseRecord(
+              id: p['id'] as String?,
+              date: DateTime.parse(p['purchase_date']),
+              price: (p['price'] as int?) ?? 0,
+              store: (p['store_name'] as String?) ?? '',
+            ),
+          )
           .toList(),
+    );
+  }
+
+  /// home_screen의 `select('*, purchases(*)')` 쿼리 결과로 생성
+  factory ConsumableItem.fromJson(Map<String, dynamic> json) {
+    final purchases =
+        (json['purchases'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ??
+        [];
+
+    return ConsumableItem.fromSupabase(
+      data: json,
+      categoryName: '기타',
+      purchases: purchases,
     );
   }
 

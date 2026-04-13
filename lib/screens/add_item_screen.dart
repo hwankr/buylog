@@ -56,10 +56,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final List<_PurchaseEntry> _purchases = [];
 
   // 이미지 상태
-  Uint8List? _imageBytes;   // 새로 선택한 이미지 bytes
+  Uint8List? _imageBytes; // 새로 선택한 이미지 bytes
   bool _isSaving = false;
 
-  bool get _hasImageSelected => _imageBytes != null || (_isEditing && widget.editItem!.imageUrl != null);
+  bool get _hasImageSelected =>
+      _imageBytes != null || (_isEditing && widget.editItem!.imageUrl != null);
 
   bool get _isEditing => widget.editItem != null;
 
@@ -222,7 +223,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
           .map(
             (e) => PurchaseRecord(
               date: e.date,
-              price: int.tryParse(
+              price:
+                  int.tryParse(
                     e.priceCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
                   ) ??
                   0,
@@ -232,13 +234,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
           .toList();
 
       final cycleDays =
-          int.tryParse(_cycleDaysCtrl.text) ?? getDefaultDays(_selectedCategory);
+          int.tryParse(_cycleDaysCtrl.text) ??
+          getDefaultDays(_selectedCategory);
 
       // 편집 시 기존 purchases (id 있음) + 새 purchases (id 없음) 합치기
       final existingPurchases = _isEditing
-          ? widget.editItem!.purchaseHistory
-              .where((r) => r.id != null)
-              .toList()
+          ? widget.editItem!.purchaseHistory.where((r) => r.id != null).toList()
           : <PurchaseRecord>[];
 
       final item = ConsumableItem(
@@ -267,9 +268,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_isEditing
-                ? '${item.name} 수정 완료!'
-                : '${item.name} 등록 완료!'),
+            content: Text(
+              _isEditing ? '${item.name} 수정 완료!' : '${item.name} 등록 완료!',
+            ),
             behavior: SnackBarBehavior.floating,
             backgroundColor: AppColors.success,
           ),
@@ -301,8 +302,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
           widget.isOcrReview
               ? 'OCR 결과 검수'
               : _isEditing
-                  ? '제품 수정'
-                  : '제품 등록',
+              ? '제품 수정'
+              : '제품 등록',
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, size: 20),
@@ -409,7 +410,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
         width: double.infinity,
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: _hasImageSelected ? AppColors.primaryLight2 : AppColors.surfaceAlt,
+          color: _hasImageSelected
+              ? AppColors.primaryLight2
+              : AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: _hasImageSelected ? AppColors.primary : AppColors.border,
@@ -438,52 +441,52 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 ],
               )
             : existingUrl != null
-                // 기존 등록된 이미지 URL 프리뷰
-                ? Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.network(existingUrl, fit: BoxFit.cover),
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          color: Colors.black45,
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: const Text(
-                            '탭하여 변경',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 12, color: Colors.white),
-                          ),
-                        ),
+            // 기존 등록된 이미지 URL 프리뷰
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(existingUrl, fit: BoxFit.cover),
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      color: Colors.black45,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: const Text(
+                        '탭하여 변경',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.white),
                       ),
-                    ],
-                  )
-                // 미선택 상태
-                : const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_photo_alternate_outlined,
-                        size: 36,
-                        color: AppColors.textMuted,
-                      ),
-                      SizedBox(height: 10),
-                      Text(
-                        '제품 이미지 선택',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        '탭하여 갤러리에서 선택 (선택 사항)',
-                        style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-                      ),
-                    ],
+                    ),
                   ),
+                ],
+              )
+            // 미선택 상태
+            : const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.add_photo_alternate_outlined,
+                    size: 36,
+                    color: AppColors.textMuted,
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    '제품 이미지 선택',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    '탭하여 갤러리에서 선택 (선택 사항)',
+                    style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -670,8 +673,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
     return Column(
       children: [
         ..._purchases.asMap().entries.map(
-              (entry) => _buildPurchaseEntry(entry.key),
-            ),
+          (entry) => _buildPurchaseEntry(entry.key),
+        ),
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
@@ -873,12 +876,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
             _isSaving
                 ? '저장 중...'
                 : _isEditing
-                    ? '수정 완료'
-                    : '등록 완료',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
+                ? '수정 완료'
+                : '등록 완료',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.primary,
@@ -979,4 +979,3 @@ class _PurchaseEntry {
     );
   }
 }
-

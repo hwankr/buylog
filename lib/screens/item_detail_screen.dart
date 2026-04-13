@@ -45,9 +45,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   void _openEdit() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => AddItemScreen(editItem: _item),
-      ),
+      MaterialPageRoute(builder: (_) => AddItemScreen(editItem: _item)),
     );
   }
 
@@ -57,9 +55,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('제품 삭제'),
-        content: Text(
-          '\'${_item.name}\'을(를) 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.',
-        ),
+        content: Text('\'${_item.name}\'을(를) 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -67,9 +63,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.danger,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
             child: const Text('삭제'),
           ),
         ],
@@ -167,8 +161,11 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 errorBuilder: (_, error, stack) => Container(
                   color: AppColors.primaryLight2,
                   child: const Center(
-                    child: Icon(Icons.broken_image_outlined,
-                        size: 48, color: AppColors.textMuted),
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      size: 48,
+                      color: AppColors.textMuted,
+                    ),
                   ),
                 ),
               ),
@@ -195,7 +192,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.primaryLight2,
                           borderRadius: BorderRadius.circular(6),
@@ -222,7 +221,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                       Text(
                         _item.brand,
                         style: const TextStyle(
-                            fontSize: 14, color: AppColors.textMuted),
+                          fontSize: 14,
+                          color: AppColors.textMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -316,9 +317,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       children: [
         Icon(icon, size: 20, color: color),
         const SizedBox(width: 12),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 14, color: AppColors.textSecondary)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+        ),
         const Spacer(),
         Text(
           value,
@@ -345,8 +347,11 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         children: [
           const Row(
             children: [
-              Icon(Icons.auto_awesome_outlined,
-                  size: 18, color: AppColors.primary),
+              Icon(
+                Icons.auto_awesome_outlined,
+                size: 18,
+                color: AppColors.primary,
+              ),
               SizedBox(width: 8),
               Text(
                 'AI 가격 비교',
@@ -365,8 +370,11 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
               child: Row(
                 children: [
                   if (p.isLowest)
-                    const Icon(Icons.check_circle,
-                        size: 16, color: AppColors.success)
+                    const Icon(
+                      Icons.check_circle,
+                      size: 16,
+                      color: AppColors.success,
+                    )
                   else
                     const SizedBox(width: 16),
                   const SizedBox(width: 10),
@@ -374,8 +382,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                     p.store,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight:
-                          p.isLowest ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: p.isLowest
+                          ? FontWeight.w600
+                          : FontWeight.w400,
                       color: p.isLowest
                           ? AppColors.text
                           : AppColors.textSecondary,
@@ -386,10 +395,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                     _formatPrice(p.price),
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight:
-                          p.isLowest ? FontWeight.w700 : FontWeight.w400,
-                      color:
-                          p.isLowest ? AppColors.success : AppColors.text,
+                      fontWeight: p.isLowest
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                      color: p.isLowest ? AppColors.success : AppColors.text,
                     ),
                   ),
                 ],
@@ -437,15 +446,12 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                         height: 10,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: i == 0
-                              ? AppColors.primary
-                              : AppColors.border,
+                          color: i == 0 ? AppColors.primary : AppColors.border,
                         ),
                       ),
                       if (!isLast)
                         Expanded(
-                          child: Container(
-                              width: 1.5, color: AppColors.border),
+                          child: Container(width: 1.5, color: AppColors.border),
                         ),
                     ],
                   ),
