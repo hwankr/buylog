@@ -28,20 +28,19 @@ class SupabaseService {
   // 초기화 & 인증
   // ────────────────────────────────────────────────────────────────────────────
 
-  /// Supabase 초기화 및 익명 로그인
+  /// 개발용 임시 사용자 ID (RLS 비활성 환경에서 사용)
+  ///
+  /// 실제 인증 연동 시 _db.auth.currentUser!.id 로 교체합니다.
+  static const _devUserId = '08cccfe3-766f-43bd-b06c-8d909e0f9fe8';
+
+  /// Supabase 초기화 (인증 불필요 — RLS 비활성 환경)
   static Future<void> initialize() async {
     await Supabase.initialize(url: _supabaseUrl, anonKey: _anonKey);
-
-    if (_db.auth.currentUser == null) {
-      final res = await _db.auth.signInAnonymously();
-      debugPrint('[Supabase] 익명 로그인: ${res.user?.id}');
-    } else {
-      debugPrint('[Supabase] 기존 세션 유지: ${_db.auth.currentUser!.id}');
-    }
+    debugPrint('[Supabase] 초기화 완료 (인증 없음, RLS 비활성 모드)');
   }
 
   /// 현재 사용자 ID
-  static String get currentUserId => _db.auth.currentUser!.id;
+  static String get currentUserId => _devUserId;
 
   // ────────────────────────────────────────────────────────────────────────────
   // 제품 목록 로드
@@ -49,6 +48,7 @@ class SupabaseService {
 
   /// 현재 사용자의 모든 제품을 Supabase에서 불러옵니다.
   static Future<List<ConsumableItem>> loadItems() async {
+    final uid = currentUserId;
     try {
       final rows = await _db.from('product_items').select('''
           id,
@@ -60,7 +60,7 @@ class SupabaseService {
           categories ( id, name ),
           purchases ( id, purchase_date, price, store_name ),
           ai_predictions ( predicted_cycle_days, confidence )
-        ''').eq('user_id', currentUserId).order('created_at', ascending: false);
+        ''').eq('user_id', uid).order('created_at', ascending: false);
 
       return rows.map<ConsumableItem>((row) {
         final categoryName =
@@ -102,13 +102,14 @@ class SupabaseService {
   /// - product_items 테이블에 upsert (id 기준)
   /// - id가 없는 신규 PurchaseRecord만 purchases 테이블에 insert
   static Future<void> saveItem(ConsumableItem item) async {
+    final uid = currentUserId;
     try {
       final categoryId = await _ensureCategory(item.category);
 
       await _db.from('product_items').upsert({
         'id': item.id,
-        'user_id': currentUserId,
-        'registered_by': currentUserId,
+        'user_id': uid,
+        'registered_by': uid,
         'category_id': categoryId,
         'name': item.name,
         'brand': item.brand,
@@ -121,7 +122,7 @@ class SupabaseService {
         if (record.id == null) {
           await _db.from('purchases').insert({
             'product_item_id': item.id,
-            'purchased_by': currentUserId,
+            'purchased_by': uid,
             'purchase_date': record.date.toIso8601String().substring(0, 10),
             'price': record.price,
             'store_name': record.store,
@@ -163,11 +164,13 @@ class SupabaseService {
   static Future<String> _ensureCategory(String name) async {
     if (_categoryCache.containsKey(name)) return _categoryCache[name]!;
 
+    final uid = currentUserId;
+
     // 기존 카테고리 조회
     final existing = await _db
         .from('categories')
         .select('id')
-        .eq('user_id', currentUserId)
+        .eq('user_id', uid)
         .eq('name', name)
         .maybeSingle();
 
@@ -180,7 +183,7 @@ class SupabaseService {
     final created = await _db
         .from('categories')
         .insert({
-          'user_id': currentUserId,
+          'user_id': uid,
           'name': name,
           'icon': _iconNameForCategory(name),
           'color': '#4F7FFF',
