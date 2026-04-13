@@ -1,20 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/group_screen.dart';
 import 'screens/scan_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // [Issue 4] Supabase 연동을 위한 임포트
+import 'screens/add_item_screen.dart';
+import 'services/supabase_service.dart';
+import 'services/item_store.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Supabase.initialize(
-    url: 'https://fervijwxdgkwjtcpzskx.supabase.co',
-    anonKey: 'sb_publishable_FO7WmA_Pu4RsGgsfRJzssQ_f0orCu7w',
-  );
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -22,6 +20,13 @@ void main() async {
       statusBarIconBrightness: Brightness.dark,
     ),
   );
+
+  // Supabase 초기화 (익명 로그인 포함)
+  await SupabaseService.initialize();
+
+  // 제품 목록 초기 로드
+  await ItemStore.instance.initialize();
+
   runApp(const BuylogApp());
 }
 
@@ -34,6 +39,14 @@ class BuylogApp extends StatelessWidget {
       title: 'Buylog',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      // 한국어 Date Picker 및 기타 위젯 지원
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+      locale: const Locale('ko', 'KR'),
       home: const MainNavigation(),
     );
   }
@@ -57,10 +70,27 @@ class _MainNavigationState extends State<MainNavigation> {
     SettingsScreen(),
   ];
 
+  void _openAddItem() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddItemScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: _screens),
+      // 홈 탭에서만 FAB 표시
+      floatingActionButton: _currentIndex == 0
+          ? FloatingActionButton(
+              onPressed: _openAddItem,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              tooltip: '제품 직접 등록',
+              child: const Icon(Icons.add),
+            )
+          : null,
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
