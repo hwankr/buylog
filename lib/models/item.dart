@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../services/ai/prediction_service.dart';
 
 class ConsumableItem {
   final String id;
@@ -30,86 +29,81 @@ class ConsumableItem {
     this.imageUrl,
   });
 
-  factory ConsumableItem.fromJson(Map<String, dynamic> json) {
-    // 구매 이력 추출
-    var purchasesJson = json['purchases'] as List<dynamic>? ?? [];
-    List<PurchaseRecord> history = purchasesJson
-        .map((p) => PurchaseRecord.fromJson(p as Map<String, dynamic>))
-        .toList();
+  /// Supabase product_items 행 + 관련 데이터로 ConsumableItem 생성
+  ///
+  /// [data]         product_items 행
+  /// [categoryName] categories.name (FK join)
+  /// [purchases]    purchases 행 목록 (FK join)
+  /// [aiPrediction] ai_predictions 최신 행 (nullable)
+  factory ConsumableItem.fromSupabase({
+    required Map<String, dynamic> data,
+    required String categoryName,
+    required List<Map<String, dynamic>> purchases,
+    Map<String, dynamic>? aiPrediction,
+  }) {
+    final cycleDays = (data['replacement_cycle_days'] as int?) ?? 30;
 
-    // 구매 날짜 리스트 추출
-    List<DateTime> purchaseDates = history.map((p) => p.date).toList();
+    // 구매일 내림차순 정렬
+    final sorted = List<Map<String, dynamic>>.from(purchases)
+      ..sort((a, b) => DateTime.parse(b['purchase_date'])
+          .compareTo(DateTime.parse(a['purchase_date'])));
 
-    // DB에서 기본 주기 및 등록일 가져오기
-    final int defaultCycle = json['replacement_cycle_days'] ?? 30;
-    // 등록일이 없으면 현재 시간으로 처리
-    final DateTime registeredAt = json['created_at'] != null
-        ? DateTime.parse(json['created_at'])
-        : DateTime.now();
+    final lastDate = sorted.isNotEmpty
+        ? DateTime.parse(sorted.first['purchase_date'])
+        : null;
 
-    final prediction = predictCycle(
-      purchaseDates: purchaseDates,
-      categoryDefaultDays: defaultCycle,
-    );
-
-    // 예측 주기를 바탕으로 D-Day 계산
-    final int calculatedDays = calcDday(
-      purchaseDates: purchaseDates,
-      predictedCycleDays: prediction.predictedCycleDays,
-      registeredAt: registeredAt,
-    );
-
-    // 잔여량
-    final double progress = calcRemainingPercent(
-      purchaseDates: purchaseDates,
-      predictedCycleDays: prediction.predictedCycleDays,
-      registeredAt: registeredAt,
-    );
+    final daysSince = lastDate != null
+        ? DateTime.now().difference(lastDate).inDays
+        : cycleDays;
 
     return ConsumableItem(
-      id: json['id'].toString(),
-      name: json['name'] ?? '이름 없음',
-      brand: json['brand'] ?? '브랜드 없음',
-      category: '기타',
-      icon: Icons.inventory_2_outlined,
-
-      daysRemaining: calculatedDays,
-      cycleDays: prediction.predictedCycleDays,
-      progress: progress,
-
-      // Phase에 따른 정밀한 예측일수와 신뢰도 반영
-      aiPredictedDays: prediction.predictedCycleDays,
-      aiConfidence: prediction.confidence,
-
-      imageUrl: json['image_url'],
-      purchaseHistory: history,
+      id: data['id'] as String,
+      name: data['name'] as String? ?? '',
+      brand: data['brand'] as String? ?? '',
+      category: categoryName,
+      icon: iconForCategory(categoryName),
+      daysRemaining: cycleDays - daysSince,
+      cycleDays: cycleDays,
+      progress: (daysSince / cycleDays).clamp(0.0, 1.0),
+      imageUrl: data['image_url'] as String?,
+      aiPredictedDays: aiPrediction?['predicted_cycle_days'] as int?,
+      aiConfidence: (aiPrediction?['confidence'] as num?)?.toDouble(),
+      purchaseHistory: sorted
+          .map((p) => PurchaseRecord(
+                id: p['id'] as String?,
+                date: DateTime.parse(p['purchase_date']),
+                price: (p['price'] as int?) ?? 0,
+                store: (p['store_name'] as String?) ?? '',
+              ))
+          .toList(),
     );
+  }
+
+  static IconData iconForCategory(String category) {
+    return switch (category) {
+      '욕실/위생' => Icons.bathroom_outlined,
+      '주방/세제' => Icons.kitchen_outlined,
+      '세탁/청소' => Icons.local_laundry_service_outlined,
+      '헤어/바디' => Icons.shower_outlined,
+      '가전/필터' => Icons.air_outlined,
+      _ => Icons.category_outlined,
+    };
   }
 }
 
 class PurchaseRecord {
-  final DateTime date; // 구매 날짜
-  final int price; // 구매 가격
-  final String store; // 구매처
+  /// Supabase purchases.id (신규 이력은 null — 저장 후 채워짐)
+  final String? id;
+  final DateTime date;
+  final int price;
+  final String store;
 
   const PurchaseRecord({
+    this.id,
     required this.date,
     required this.price,
     required this.store,
   });
-
-  // JSON -> PurchaseRecord 객체 변환
-  factory PurchaseRecord.fromJson(Map<String, dynamic> json) {
-    return PurchaseRecord(
-      date: json['purchase_date'] != null
-          ? DateTime.parse(json['purchase_date'])
-          : (json['created_at'] != null
-                ? DateTime.parse(json['created_at'])
-                : DateTime.now()),
-      price: json['price'] ?? 0,
-      store: json['store_name'] ?? '알 수 없음',
-    );
-  }
 }
 
 class GroupMember {
