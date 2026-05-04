@@ -86,4 +86,15 @@
 | `29bf470` | (선행) `lib/screens/items_screen.dart` 신규 |
 | `1e671ac` | (선행) `ItemStore` 롤백 추가 |
 | `54dcd3f` | (선행) `ItemDetailScreen` 에러 처리 |
-| (이 PR 본편) | 위 노트의 본 변경사항 — Task 7에서 SHA 채움 |
+| `ac3b3ac` | docs: REDESIGN_NOTES 신규 |
+| `7492fd1` | docs: REDESIGN_NOTES 시제 프레이밍 정리 |
+| `a93467d` | theme: warm-neutral 팔레트로 토큰 값 교체 |
+| `9f92613` | theme: D-day 4-tier 보존 위해 `danger ≠ primary` 분리 |
+| `ee7524f` | theme: `dangerLight` 갭 확대 + 시각적 한계 문서화 |
+| `d1ea091` | widgets/home: `HomeHeroCard`, `UpcomingItemRow` 신규 |
+| `9dd1dbf` | widgets/home: 리뷰 반영 (조건부 CTA, warm surface) |
+| `4efd77e` | home: `ItemStore` 구독으로 빌드 트리 교체 |
+| `e8a32af` | main: 하단 탭 재구성 + FAB 액션 시트 |
+| `46db1ac` | home/main: 리뷰 반영 (exhaustive switch, userName dedup) |
+| `6aad00f` | home: `upcoming` 비었을 때 '다가오는 교체' 섹션 숨김 |
+| `ea97dbe` | test/widget: 탭 라벨 검증 갱신 |
