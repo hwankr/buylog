@@ -13,11 +13,16 @@ class HomeHeroCard extends StatelessWidget {
     super.key,
     required this.item,
     required this.onTap,
+    this.onDetailTap,
     this.onOrderTap,
   });
 
   final ConsumableItem item;
+  /// 카드 본체(영역) 탭 시 호출. 일반적으로 상세 화면 진입.
   final VoidCallback onTap;
+  /// "자세히" 버튼 전용 핸들러. null이면 [onTap]로 폴백.
+  final VoidCallback? onDetailTap;
+  /// "지금 주문" 핸들러. null이면 버튼 자체를 렌더링하지 않는다.
   final VoidCallback? onOrderTap;
 
   Color get _tierBg {
@@ -27,7 +32,7 @@ class HomeHeroCard extends StatelessWidget {
     return AppColors.successLight;
   }
 
-  String _ymd(DateTime d) =>
+  static String _ymd(DateTime d) =>
       '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
 
   @override
@@ -37,7 +42,7 @@ class HomeHeroCard extends StatelessWidget {
         : null;
     final aiPct = item.aiConfidence == null
         ? null
-        : (item.aiConfidence! * 100).round();
+        : (item.aiConfidence!.clamp(0.0, 1.0) * 100).round();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -132,22 +137,24 @@ class HomeHeroCard extends StatelessWidget {
                       Expanded(
                         child: _HeroButton(
                           label: '자세히',
-                          background: Colors.white,
+                          background: AppColors.surface,
                           foreground: AppColors.textSecondary,
                           border: AppColors.border,
-                          onTap: onTap,
+                          onTap: onDetailTap ?? onTap,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _HeroButton(
-                          label: '지금 주문',
-                          icon: Icons.storefront_outlined,
-                          background: AppColors.success,
-                          foreground: Colors.white,
-                          onTap: onOrderTap ?? () {},
+                      if (onOrderTap != null) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _HeroButton(
+                            label: '지금 주문',
+                            icon: Icons.storefront_outlined,
+                            background: AppColors.success,
+                            foreground: Colors.white,
+                            onTap: onOrderTap!,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ],
@@ -172,7 +179,7 @@ class _MiniPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
