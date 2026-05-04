@@ -16,6 +16,10 @@ ConsumableItem _seed(String id, {String name = 'X', int days = 10}) =>
 
 void main() {
   group('ItemStore rollback', () {
+    setUp(() {
+      ItemStore.instance.value = [];
+    });
+
     test('add: Supabase 실패 시 이전 리스트 상태로 복원되고 rethrow', () async {
       ItemStore.instance.value = [_seed('a')];
       final before = List.of(ItemStore.instance.value);
@@ -23,7 +27,7 @@ void main() {
       // SupabaseService 미초기화 → saveItem 내부에서 throw
       await expectLater(
         ItemStore.instance.add(_seed('b')),
-        throwsA(isA<Object>()),
+        throwsA(anything),
       );
 
       expect(
@@ -38,7 +42,7 @@ void main() {
 
       await expectLater(
         ItemStore.instance.delete('a'),
-        throwsA(isA<Object>()),
+        throwsA(anything),
       );
 
       expect(
@@ -54,7 +58,7 @@ void main() {
 
       await expectLater(
         ItemStore.instance.update(_seed('a', name: 'new')),
-        throwsA(isA<Object>()),
+        throwsA(anything),
       );
 
       expect(ItemStore.instance.value.single.name, 'old');

@@ -71,8 +71,20 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     );
 
     if (confirmed == true) {
-      await ItemStore.instance.delete(_item.id);
-      // _onStoreChanged가 자동으로 pop 처리
+      try {
+        await ItemStore.instance.delete(_item.id);
+        // _onStoreChanged가 자동으로 pop 처리
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('제품을 삭제하지 못했어요. 잠시 후 다시 시도해주세요.'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: AppColors.danger,
+            ),
+          );
+        }
+      }
     }
   }
 

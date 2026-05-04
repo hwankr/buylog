@@ -22,6 +22,8 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
   }
 
   /// 새 제품 추가 — 로컬 즉시 반영 후 Supabase 동기화. 실패 시 롤백.
+  ///
+  /// ConsumableItem은 모든 필드가 final인 불변 객체이므로, 스냅샷을 얕은 복사(List.unmodifiable)로 저장해도 안전합니다.
   Future<void> add(ConsumableItem item) async {
     final previous = List<ConsumableItem>.unmodifiable(value);
     value = [...value, item];
