@@ -66,6 +66,17 @@
 - **탭 IA 되돌리기**: `lib/main.dart`만 되돌리면 `스캔` 탭이 복귀합니다. `lib/screens/items_screen.dart`는 import 사라지면 오펀이 되니 함께 정리하세요.
 - **전체 되돌리기**: `git revert`로 본 PR의 머지 커밋 한 개.
 
+## 알려진 시각적 한계 (후속 폴리시 후보)
+
+리디자인 적용 후에도 남는 자잘한 시각 이슈를 팀 공통 인지로 남깁니다. 본 PR 범위에서는 의도적으로 손대지 않았습니다.
+
+- **D-day 배지 텍스트 대비**: warm 팔레트의 status fg/bg 페어(`success/successLight`, `warning/warningLight`, `primary/primaryLight2`)는 12 px 굵은 글자에서 WCAG AA(4.5:1)에 미달합니다. 디자인 핸드오프의 의도적 선택을 따랐고, 접근성 보강이 필요해지면 fg 토큰을 한 단계 어둡게 하거나 별도 `onPrimary/onSuccess` 토큰을 도입하는 follow-up이 자연스럽습니다.
+- **`lib/widgets/reports/category_pie_chart.dart` 카테고리 색**: 파일 내부에 cool 톤 hex가 하드코딩되어 있어 새 팔레트와 톤이 어긋나 보일 수 있습니다. 팀원 작성 코드라 이번 PR에서는 보존했습니다.
+- **`lib/data/sample_data.dart`의 멤버 아바타 색**: 4명 그룹 멤버 아바타 색이 hex 문자열로 박혀 있어 warm 팔레트와 무관하게 표시됩니다. 동일한 이유로 보존했습니다.
+- **`lib/screens/scan_screen.dart`의 뷰파인더 슬레이트(`0xFF1E293B`)**: 카메라 오버레이용 어두운 배경. 카메라 chrome 톤은 디자인 변경 범위 밖이라 그대로 둡니다.
+
+위 항목 중 하나라도 폴리시가 필요하다고 판단되면 별도 PR로 진행해주세요.
+
 ## 관련 커밋
 
 본 PR이 develop 위에 누적하는 커밋:

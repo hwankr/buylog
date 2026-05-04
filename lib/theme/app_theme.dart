@@ -35,7 +35,7 @@ class AppColors {
   static const warning = Color(0xFFB98430);
   static const warningLight = Color(0xFFF2E2C0);
   static const danger = Color(0xFFB0392E);
-  static const dangerLight = Color(0xFFF6D5CD);
+  static const dangerLight = Color(0xFFEFC5B6);
 }
 
 class AppTheme {
