@@ -65,6 +65,9 @@ class MainNavigation extends StatefulWidget {
 class MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
+  /// 자식 화면이 탭 전환 시 참조할 수 있도록 노출하는 인덱스 상수.
+  static const int kItemsTabIndex = 2;
+
   static const _tabs = <_TabSpec>[
     _TabSpec('홈', Icons.home_outlined, Icons.home),
     _TabSpec('그룹', Icons.group_outlined, Icons.group),
@@ -79,21 +82,14 @@ class MainNavigationState extends State<MainNavigation> {
     setState(() => _currentIndex = index);
   }
 
-  Widget _screenAt(int index) {
-    switch (index) {
-      case 0:
-        return const HomeScreen();
-      case 1:
-        return const GroupScreen();
-      case 2:
-        return const ItemsScreen();
-      case 3:
-        return const ReportsScreen();
-      case 4:
-        return const SettingsScreen();
-    }
-    return const HomeScreen();
-  }
+  Widget _screenAt(int index) => switch (index) {
+        0 => const HomeScreen(),
+        1 => const GroupScreen(),
+        2 => const ItemsScreen(),
+        3 => const ReportsScreen(),
+        4 => const SettingsScreen(),
+        _ => throw StateError('No screen registered for tab $index'),
+      };
 
   Future<void> _openAddSheet() async {
     final choice = await showModalBottomSheet<_AddChoice>(

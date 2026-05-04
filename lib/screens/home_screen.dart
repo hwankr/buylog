@@ -30,8 +30,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _goToItemsTab() {
     final root = context.findAncestorStateOfType<MainNavigationState>();
     if (root != null) {
-      root.switchTab(2);
+      root.switchTab(MainNavigationState.kItemsTabIndex);
     } else {
+      // 위젯 테스트나 MainNavigation 외부 컨텍스트 폴백.
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const ItemsScreen(showBack: true)),
       );
@@ -59,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
         valueListenable: ItemStore.instance,
         builder: (context, items, _) {
           if (items.isEmpty) {
-            return _EmptyHome(onAdd: _goToItemsTab);
+            return _EmptyHome(onAdd: _goToItemsTab, userName: _userName);
           }
 
           final sorted = List.of(items)
@@ -130,6 +131,8 @@ class _HomeScreenState extends State<HomeScreen> {
               const SliverToBoxAdapter(
                 child: _SectionHeader(title: '최근 기록'),
               ),
+              // TODO: 디자인 프로토타입 mock. 실제 활동 로그(ItemStore 변경
+              // 이력 등) 연결 시 교체.
               const SliverPadding(
                 padding: EdgeInsets.fromLTRB(20, 10, 20, 8),
                 sliver: SliverToBoxAdapter(
@@ -263,6 +266,8 @@ class _AiInsightCard extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: 3),
+                  // TODO: 디자인 프로토타입 mock 카피. 실제 AI 인사이트
+                  // 데이터 소스 연결 시 교체.
                   Text(
                     '평균 90일 주기지만 최근엔 85일에 교체하셨어요. 4개월 전보다 사용량이 6% 늘었어요.',
                     style: TextStyle(
@@ -353,9 +358,10 @@ class _LedgerRow extends StatelessWidget {
 }
 
 class _EmptyHome extends StatelessWidget {
-  const _EmptyHome({required this.onAdd});
+  const _EmptyHome({required this.onAdd, required this.userName});
 
   final VoidCallback onAdd;
+  final String userName;
 
   @override
   Widget build(BuildContext context) {
@@ -364,11 +370,11 @@ class _EmptyHome extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(0, 8, 0, 0),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
             child: Text(
-              '안녕하세요, 지민님',
-              style: TextStyle(
+              '안녕하세요, $userName님',
+              style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
                 color: AppColors.text,
