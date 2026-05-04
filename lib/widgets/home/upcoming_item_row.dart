@@ -8,11 +8,7 @@ import '../dday_badge.dart';
 /// `widgets/item_card.dart::PurchaseListItem`과 비슷하지만 D-day 강조 + 더
 /// 컴팩트한 패딩이라 별도 위젯으로 둔다. 팀원 코드를 수정하지 않기 위함.
 class UpcomingItemRow extends StatelessWidget {
-  const UpcomingItemRow({
-    super.key,
-    required this.item,
-    required this.onTap,
-  });
+  const UpcomingItemRow({super.key, required this.item, required this.onTap});
 
   final ConsumableItem item;
   final VoidCallback onTap;

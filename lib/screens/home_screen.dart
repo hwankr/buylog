@@ -67,8 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ..sort((a, b) => a.daysRemaining.compareTo(b.daysRemaining));
           final hero = sorted.first;
           final upcoming = sorted.skip(1).take(4).toList();
-          final weekCount =
-              items.where((i) => i.daysRemaining <= 7).length;
+          final weekCount = items.where((i) => i.daysRemaining <= 7).length;
 
           return CustomScrollView(
             slivers: [
@@ -80,10 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               SliverToBoxAdapter(
-                child: HomeHeroCard(
-                  item: hero,
-                  onTap: () => _openDetail(hero),
-                ),
+                child: HomeHeroCard(item: hero, onTap: () => _openDetail(hero)),
               ),
               const SliverToBoxAdapter(child: _AiInsightCard()),
               if (upcoming.isNotEmpty) ...[
@@ -127,9 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ],
-              const SliverToBoxAdapter(
-                child: _SectionHeader(title: '최근 기록'),
-              ),
+              const SliverToBoxAdapter(child: _SectionHeader(title: '최근 기록')),
               // TODO: 디자인 프로토타입 mock. 실제 활동 로그(ItemStore 변경
               // 이력 등) 연결 시 교체.
               const SliverPadding(
@@ -137,15 +131,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 sliver: SliverToBoxAdapter(
                   child: Column(
                     children: [
-                      _LedgerRow(
-                        time: '오늘 14:22',
-                        text: '이마트 영수증 3개 항목 자동 추가',
-                      ),
+                      _LedgerRow(time: '오늘 14:22', text: '이마트 영수증 3개 항목 자동 추가'),
                       _LedgerRow(time: '04.18', text: '치약 구매 기록됨'),
-                      _LedgerRow(
-                        time: '04.01',
-                        text: '세탁세제 주기 45일로 업데이트',
-                      ),
+                      _LedgerRow(time: '04.01', text: '세탁세제 주기 45일로 업데이트'),
                     ],
                   ),
                 ),

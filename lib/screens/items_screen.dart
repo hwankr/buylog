@@ -126,9 +126,10 @@ class _ItemsScreenState extends State<ItemsScreen> {
       switch (_filter) {
         _Filter.all => List.of(items),
         _Filter.urgent => items.where((i) => i.daysRemaining <= 7).toList(),
-        _Filter.soon => items
-            .where((i) => i.daysRemaining > 7 && i.daysRemaining <= 30)
-            .toList(),
+        _Filter.soon =>
+          items
+              .where((i) => i.daysRemaining > 7 && i.daysRemaining <= 30)
+              .toList(),
         _Filter.fresh => items.where((i) => i.daysRemaining > 30).toList(),
       };
 

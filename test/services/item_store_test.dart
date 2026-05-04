@@ -25,10 +25,7 @@ void main() {
       final before = List.of(ItemStore.instance.value);
 
       // SupabaseService 미초기화 → saveItem 내부에서 throw
-      await expectLater(
-        ItemStore.instance.add(_seed('b')),
-        throwsA(anything),
-      );
+      await expectLater(ItemStore.instance.add(_seed('b')), throwsA(anything));
 
       expect(
         ItemStore.instance.value.map((e) => e.id).toList(),
@@ -40,10 +37,7 @@ void main() {
     test('delete: Supabase 실패 시 삭제된 아이템이 복원된다', () async {
       ItemStore.instance.value = [_seed('a'), _seed('b')];
 
-      await expectLater(
-        ItemStore.instance.delete('a'),
-        throwsA(anything),
-      );
+      await expectLater(ItemStore.instance.delete('a'), throwsA(anything));
 
       expect(
         ItemStore.instance.value.map((e) => e.id).toSet(),

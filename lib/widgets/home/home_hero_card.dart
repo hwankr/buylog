@@ -18,10 +18,13 @@ class HomeHeroCard extends StatelessWidget {
   });
 
   final ConsumableItem item;
+
   /// 카드 본체(영역) 탭 시 호출. 일반적으로 상세 화면 진입.
   final VoidCallback onTap;
+
   /// "자세히" 버튼 전용 핸들러. null이면 [onTap]로 폴백.
   final VoidCallback? onDetailTap;
+
   /// "지금 주문" 핸들러. null이면 버튼 자체를 렌더링하지 않는다.
   final VoidCallback? onOrderTap;
 
@@ -66,8 +69,10 @@ class HomeHeroCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(8),
@@ -233,8 +238,9 @@ class _HeroButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(12),
-            border:
-                border == null ? null : Border.all(color: border!, width: 1),
+            border: border == null
+                ? null
+                : Border.all(color: border!, width: 1),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,

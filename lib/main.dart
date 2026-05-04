@@ -83,13 +83,13 @@ class MainNavigationState extends State<MainNavigation> {
   }
 
   Widget _screenAt(int index) => switch (index) {
-        0 => const HomeScreen(),
-        1 => const GroupScreen(),
-        2 => const ItemsScreen(),
-        3 => const ReportsScreen(),
-        4 => const SettingsScreen(),
-        _ => throw StateError('No screen registered for tab $index'),
-      };
+    0 => const HomeScreen(),
+    1 => const GroupScreen(),
+    2 => const ItemsScreen(),
+    3 => const ReportsScreen(),
+    4 => const SettingsScreen(),
+    _ => throw StateError('No screen registered for tab $index'),
+  };
 
   Future<void> _openAddSheet() async {
     final choice = await showModalBottomSheet<_AddChoice>(
@@ -130,9 +130,9 @@ class MainNavigationState extends State<MainNavigation> {
           ),
         );
       case _AddChoice.manual:
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AddItemScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const AddItemScreen()));
     }
   }
 
