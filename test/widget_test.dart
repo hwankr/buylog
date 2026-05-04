@@ -35,7 +35,7 @@ void main() {
     // 앱을 렌더링합니다.
     await tester.pumpWidget(const BuylogApp());
 
-    // 화면에 '내 아이템'이 있는지 확인합니다.
-    expect(find.text('내 아이템'), findsOneWidget);
+    // 하단 탭의 '모든 제품' 라벨로 새 디자인 셸이 렌더링되었는지 확인합니다.
+    expect(find.text('모든 제품'), findsOneWidget);
   });
 }
