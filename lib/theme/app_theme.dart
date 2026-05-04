@@ -34,8 +34,8 @@ class AppColors {
   static const successLight = Color(0xFFD8E5DA);
   static const warning = Color(0xFFB98430);
   static const warningLight = Color(0xFFF2E2C0);
-  static const danger = Color(0xFFC25A4A);
-  static const dangerLight = Color(0xFFF2DDD4);
+  static const danger = Color(0xFFB0392E);
+  static const dangerLight = Color(0xFFF6D5CD);
 }
 
 class AppTheme {
