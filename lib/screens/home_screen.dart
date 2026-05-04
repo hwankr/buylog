@@ -86,37 +86,35 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SliverToBoxAdapter(child: _AiInsightCard()),
-              SliverToBoxAdapter(
-                child: _SectionHeader(
-                  title: '다가오는 교체',
-                  trailing: TextButton(
-                    onPressed: _goToItemsTab,
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      minimumSize: const Size(0, 0),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '모두 보기',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+              if (upcoming.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: _SectionHeader(
+                    title: '다가오는 교체',
+                    trailing: TextButton(
+                      onPressed: _goToItemsTab,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '모두 보기',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                        SizedBox(width: 2),
-                        Icon(Icons.chevron_right, size: 14),
-                      ],
+                          SizedBox(width: 2),
+                          Icon(Icons.chevron_right, size: 14),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              if (upcoming.isEmpty)
-                const SliverToBoxAdapter(child: SizedBox.shrink())
-              else
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                   sliver: SliverList.separated(
@@ -128,6 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
+              ],
               const SliverToBoxAdapter(
                 child: _SectionHeader(title: '최근 기록'),
               ),
