@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'add_item_screen.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -15,6 +16,13 @@ class _ScanScreenState extends State<ScanScreen>
   ScanState _state = ScanState.camera;
   late AnimationController _pulseController;
 
+  // OCR 결과 상태 (스캔 완료 후 편집 가능)
+  final TextEditingController _storeCtrl =
+      TextEditingController(text: '이마트 성수점');
+  DateTime _scanDate = DateTime(2026, 4, 8);
+  final List<_OcrItemEntry> _ocrItems = [];
+  bool _isSaving = false;
+
   @override
   void initState() {
     super.initState();
@@ -22,11 +30,21 @@ class _ScanScreenState extends State<ScanScreen>
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
+
+    _ocrItems.addAll([
+      _OcrItemEntry('정수기 필터 (코웨이)', 35000),
+      _OcrItemEntry('주방세제 (퐁퐁)', 4500),
+      _OcrItemEntry('세탁세제 (피죤)', 15900),
+    ]);
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _storeCtrl.dispose();
+    for (final item in _ocrItems) {
+      item.dispose();
+    }
     super.dispose();
   }
 
@@ -39,6 +57,56 @@ class _ScanScreenState extends State<ScanScreen>
 
   void _rescan() {
     setState(() => _state = ScanState.camera);
+  }
+
+  Future<void> _pickScanDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _scanDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+            surface: AppColors.surface,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _scanDate = picked);
+  }
+
+  // 각 OCR 아이템을 AddItemScreen으로 순차 이동하여 저장
+  Future<void> _confirmAndSave() async {
+    setState(() => _isSaving = true);
+    try {
+      for (final ocrItem in _ocrItems) {
+        final priceText =
+            ocrItem.priceCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+        final price = int.tryParse(priceText);
+        if (!mounted) break;
+        await Navigator.push<void>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AddItemScreen(
+              prefillData: OcrPrefillData(
+                productName: ocrItem.nameCtrl.text.trim(),
+                price: price,
+                storeName: _storeCtrl.text.trim(),
+                purchaseDate: _scanDate,
+              ),
+              isOcrReview: true,
+            ),
+          ),
+        );
+      }
+      if (mounted) setState(() => _state = ScanState.camera);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -68,7 +136,6 @@ class _ScanScreenState extends State<ScanScreen>
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: 24),
-        // Camera viewfinder
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -79,7 +146,6 @@ class _ScanScreenState extends State<ScanScreen>
               ),
               child: Stack(
                 children: [
-                  // Simulated camera background
                   Center(
                     child: Icon(
                       Icons.receipt_long_outlined,
@@ -87,7 +153,6 @@ class _ScanScreenState extends State<ScanScreen>
                       color: Colors.white.withOpacity(0.15),
                     ),
                   ),
-                  // Corner guides
                   Positioned(
                     top: 40,
                     left: 30,
@@ -108,7 +173,6 @@ class _ScanScreenState extends State<ScanScreen>
                     right: 30,
                     child: _cornerGuide(false, false),
                   ),
-                  // Center text
                   const Center(
                     child: Text(
                       '카메라 미리보기',
@@ -121,7 +185,6 @@ class _ScanScreenState extends State<ScanScreen>
           ),
         ),
         const SizedBox(height: 24),
-        // Scan button
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           child: SizedBox(
@@ -208,6 +271,11 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Widget _buildResult() {
+    final total = _ocrItems.fold<int>(0, (sum, e) {
+      final t = e.priceCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+      return sum + (int.tryParse(t) ?? 0);
+    });
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -215,13 +283,12 @@ class _ScanScreenState extends State<ScanScreen>
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.check_circle,
-                color: AppColors.success,
-                size: 24,
-              ),
+              const Icon(Icons.check_circle, color: AppColors.success, size: 24),
               const SizedBox(width: 8),
-              Text('스캔 완료', style: Theme.of(context).textTheme.headlineMedium),
+              Text(
+                '스캔 완료',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -231,7 +298,6 @@ class _ScanScreenState extends State<ScanScreen>
           ),
           const SizedBox(height: 24),
 
-          // Extracted data
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -241,13 +307,102 @@ class _ScanScreenState extends State<ScanScreen>
             ),
             child: Column(
               children: [
-                _editableField('매장명', '이마트 성수점'),
-                _editableField('날짜', '2026.04.08'),
-                const Divider(height: 24, color: AppColors.border),
-                _editableItemRow('정수기 필터 (코웨이)', '35,000원'),
-                _editableItemRow('주방세제 (퐁퐁)', '4,500원'),
-                _editableItemRow('세탁세제 (피죤)', '15,900원'),
-                const Divider(height: 24, color: AppColors.border),
+                // 매장명
+                _labeledTextField('매장명', _storeCtrl),
+                const SizedBox(height: 14),
+                // 구매일 (탭으로 날짜 선택)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '날짜',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    InkWell(
+                      onTap: _pickScanDate,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.calendar_today_outlined,
+                              size: 15,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${_scanDate.year}.${_scanDate.month.toString().padLeft(2, '0')}.${_scanDate.day.toString().padLeft(2, '0')}',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: AppColors.text,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1, color: AppColors.border),
+                const SizedBox(height: 14),
+                // 아이템 목록
+                ...List.generate(_ocrItems.length, (i) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.drag_indicator,
+                          size: 18,
+                          color: AppColors.textMuted,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: _ocrItems[i].nameCtrl,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.text,
+                            ),
+                            decoration: _compactDecoration(),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: _ocrItems[i].priceCtrl,
+                            textAlign: TextAlign.right,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.text,
+                            ),
+                            decoration: _compactDecoration(suffix: '원'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const Divider(height: 16, color: AppColors.border),
+                // 합계
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -260,8 +415,8 @@ class _ScanScreenState extends State<ScanScreen>
                       ),
                     ),
                     Text(
-                      '55,400원',
-                      style: TextStyle(
+                      _formatPrice(total),
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                         color: AppColors.primary,
@@ -272,25 +427,35 @@ class _ScanScreenState extends State<ScanScreen>
               ],
             ),
           ),
+          const SizedBox(height: 12),
+          Text(
+            '아이템 ${_ocrItems.length}개를 순서대로 검수 후 각각 저장합니다.',
+            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+          ),
           const SizedBox(height: 20),
 
-          // Action buttons
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('저장되었습니다!'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              },
-              icon: const Icon(Icons.check, size: 20),
-              label: const Text('확인 및 저장', style: TextStyle(fontSize: 16)),
+              onPressed: _isSaving ? null : _confirmAndSave,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.check, size: 20),
+              label: Text(
+                _isSaving ? '저장 중...' : '확인 및 저장',
+                style: const TextStyle(fontSize: 16),
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: AppColors.textMuted,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
@@ -320,112 +485,85 @@ class _ScanScreenState extends State<ScanScreen>
     );
   }
 
-  Widget _editableField(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 6),
-          TextFormField(
-            initialValue: value,
-            style: const TextStyle(fontSize: 15, color: AppColors.text),
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(
-                  color: AppColors.primary,
-                  width: 1.5,
-                ),
-              ),
+  Widget _labeledTextField(String label, TextEditingController ctrl) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: ctrl,
+          style: const TextStyle(fontSize: 15, color: AppColors.text),
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 1.5),
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  InputDecoration _compactDecoration({String? suffix}) {
+    return InputDecoration(
+      isDense: true,
+      suffixText: suffix,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
     );
   }
 
-  Widget _editableItemRow(String name, String price) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.drag_indicator,
-            size: 18,
-            color: AppColors.textMuted,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 3,
-            child: TextFormField(
-              initialValue: name,
-              style: const TextStyle(fontSize: 14, color: AppColors.text),
-              decoration: InputDecoration(
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            flex: 2,
-            child: TextFormField(
-              initialValue: price,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.text,
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _formatPrice(int price) {
+    final str = price.toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) buffer.write(',');
+      buffer.write(str[i]);
+    }
+    return '$buffer원';
+  }
+}
+
+class _OcrItemEntry {
+  final TextEditingController nameCtrl;
+  final TextEditingController priceCtrl;
+
+  _OcrItemEntry(String name, int price)
+      : nameCtrl = TextEditingController(text: name),
+        priceCtrl = TextEditingController(text: price.toString());
+
+  void dispose() {
+    nameCtrl.dispose();
+    priceCtrl.dispose();
   }
 }
 

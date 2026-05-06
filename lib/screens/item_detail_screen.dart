@@ -421,82 +421,110 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '구매 이력',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppColors.text,
-            ),
+          Row(
+            children: [
+              const Text(
+                '구매 이력',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${_item.purchaseHistory.length}건',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           ..._item.purchaseHistory.asMap().entries.map((entry) {
             final i = entry.key;
             final record = entry.value;
+            final isFirst = i == 0;
             final isLast = i == _item.purchaseHistory.length - 1;
 
-            return IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Column(
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 24,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      const SizedBox(height: 5),
                       Container(
                         width: 10,
                         height: 10,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: i == 0 ? AppColors.primary : AppColors.border,
+                          color: isFirst ? AppColors.primary : AppColors.border,
                         ),
                       ),
                       if (!isLast)
-                        Expanded(
-                          child: Container(width: 1.5, color: AppColors.border),
+                        Container(
+                          width: 1.5,
+                          height: 52,
+                          color: AppColors.border,
                         ),
                     ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 '${record.date.year}.${record.date.month.toString().padLeft(2, '0')}.${record.date.day.toString().padLeft(2, '0')}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: isFirst
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
                                   color: AppColors.text,
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                record.store,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textMuted,
+                              if (record.store.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  record.store,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMuted,
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
                           ),
+                        ),
+                        if (record.price > 0)
                           Text(
                             _formatPrice(record.price),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
+                              fontWeight: isFirst
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: isFirst
+                                  ? AppColors.text
+                                  : AppColors.textSecondary,
                             ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             );
           }),
         ],
