@@ -82,6 +82,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       for (final r in edit.purchaseHistory) {
         _purchases.add(
           _PurchaseEntry(
+            id: r.id,
             date: r.date,
             priceCtrl: TextEditingController(text: r.price.toString()),
             storeCtrl: TextEditingController(text: r.store),
@@ -218,10 +219,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
         );
       }
 
+      // _purchases가 UI의 단일 진실 공급원 — 기존 id 보존, 신규는 null
       final purchases = _purchases
           .where((e) => e.priceCtrl.text.trim().isNotEmpty)
           .map(
             (e) => PurchaseRecord(
+              id: e.id,
               date: e.date,
               price:
                   int.tryParse(
@@ -237,10 +240,95 @@ class _AddItemScreenState extends State<AddItemScreen> {
           int.tryParse(_cycleDaysCtrl.text) ??
           getDefaultDays(_selectedCategory);
 
-      // 편집 시 기존 purchases (id 있음) + 새 purchases (id 없음) 합치기
-      final existingPurchases = _isEditing
-          ? widget.editItem!.purchaseHistory.where((r) => r.id != null).toList()
-          : <PurchaseRecord>[];
+      // 편집 시 UI에서 삭제된 구매 이력을 DB에서도 제거
+      if (_isEditing) {
+        final originalIds = widget.editItem!.purchaseHistory
+            .where((r) => r.id != null)
+            .map((r) => r.id!)
+            .toSet();
+        final keepIds = purchases
+            .where((r) => r.id != null)
+            .map((r) => r.id!)
+            .toSet();
+        final deletedIds = originalIds.difference(keepIds);
+        if (deletedIds.isNotEmpty) {
+          await SupabaseService.deletePurchases(deletedIds);
+        }
+      }
+
+      // 신규 등록 시 동일 이름 제품이 있으면 병합 여부 확인
+      if (!_isEditing) {
+        final nameToCheck = _nameCtrl.text.trim().toLowerCase();
+        final duplicate = ItemStore.instance.value
+            .cast<ConsumableItem?>()
+            .firstWhere(
+              (i) => i!.name.trim().toLowerCase() == nameToCheck,
+              orElse: () => null,
+            );
+
+        if (duplicate != null && mounted) {
+          final shouldMerge = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('동일 제품 발견'),
+              content: Text(
+                "'${duplicate.name}'이(가) 이미 등록되어 있습니다.\n구매 이력을 기존 제품에 추가하시겠습니까?",
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('새로 등록'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
+                  child: const Text('이력 추가'),
+                ),
+              ],
+            ),
+          );
+
+          if (shouldMerge == true) {
+            final newPurchases = purchases
+                .map(
+                  (p) => PurchaseRecord(
+                    date: p.date,
+                    price: p.price,
+                    store: p.store,
+                  ),
+                )
+                .toList();
+            final merged = ConsumableItem(
+              id: duplicate.id,
+              name: duplicate.name,
+              brand: duplicate.brand,
+              category: duplicate.category,
+              icon: duplicate.icon,
+              daysRemaining: duplicate.daysRemaining,
+              cycleDays: duplicate.cycleDays,
+              progress: duplicate.progress,
+              aiPredictedDays: duplicate.aiPredictedDays,
+              aiConfidence: duplicate.aiConfidence,
+              imageUrl: imageUrl ?? duplicate.imageUrl,
+              purchaseHistory: [...duplicate.purchaseHistory, ...newPurchases],
+            );
+            await ItemStore.instance.update(merged);
+            if (mounted) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${duplicate.name}에 구매 이력이 추가되었습니다!'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: AppColors.success,
+                ),
+              );
+            }
+            return;
+          }
+        }
+      }
 
       final item = ConsumableItem(
         id: itemId,
@@ -254,7 +342,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         aiPredictedDays: _isEditing ? widget.editItem!.aiPredictedDays : null,
         aiConfidence: _isEditing ? widget.editItem!.aiConfidence : null,
         imageUrl: imageUrl,
-        purchaseHistory: [...existingPurchases, ...purchases],
+        purchaseHistory: purchases,
       );
 
       // Supabase 저장 + 인메모리 스토어 반영
@@ -961,11 +1049,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
 // ---------------------------------------------------------------------------
 
 class _PurchaseEntry {
+  final String? id; // DB에 저장된 기존 이력은 id 보유, 신규는 null
   final DateTime date;
   final TextEditingController priceCtrl;
   final TextEditingController storeCtrl;
 
   _PurchaseEntry({
+    this.id,
     required this.date,
     required this.priceCtrl,
     required this.storeCtrl,
@@ -973,6 +1063,7 @@ class _PurchaseEntry {
 
   _PurchaseEntry copyWith({DateTime? date}) {
     return _PurchaseEntry(
+      id: id,
       date: date ?? this.date,
       priceCtrl: priceCtrl,
       storeCtrl: storeCtrl,
