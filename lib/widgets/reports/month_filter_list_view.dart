@@ -24,7 +24,7 @@ class MonthFilterListView extends StatelessWidget {
       if (i > 0 && (str.length - i) % 3 == 0) buffer.write(',');
       buffer.write(str[i]);
     }
-    return '${buffer}원';
+    return '$buffer원';
   }
 
   @override
@@ -105,7 +105,7 @@ class MonthFilterListView extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(item.icon, color: color, size: 18),

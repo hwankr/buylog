@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../utils/dday_format.dart';
 
 class CountdownRing extends StatelessWidget {
   final int daysRemaining;
@@ -39,7 +40,7 @@ class CountdownRing extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'D-$daysRemaining',
+                formatDdayLabel(daysRemaining),
                 style: TextStyle(
                   fontSize: size * 0.2,
                   fontWeight: FontWeight.w700,
@@ -48,7 +49,7 @@ class CountdownRing extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '교체까지',
+                formatDdayCaption(daysRemaining),
                 style: TextStyle(
                   fontSize: size * 0.1,
                   color: AppColors.textMuted,

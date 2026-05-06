@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/sample_data.dart';
 import '../theme/app_theme.dart';
+import '../utils/dday_format.dart';
 
 class GroupScreen extends StatefulWidget {
   const GroupScreen({super.key});
@@ -201,7 +202,9 @@ class _GroupScreenState extends State<GroupScreen> {
                             boxShadow: !_showGroupItems
                                 ? [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.05,
+                                      ),
                                       blurRadius: 4,
                                     ),
                                   ]
@@ -234,7 +237,9 @@ class _GroupScreenState extends State<GroupScreen> {
                             boxShadow: _showGroupItems
                                 ? [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.05,
+                                      ),
                                       blurRadius: 4,
                                     ),
                                   ]
@@ -300,7 +305,7 @@ class _GroupScreenState extends State<GroupScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           sliver: SliverList.separated(
             itemCount: categoryItems.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (context, index) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final item = categoryItems[index];
               final updater = _showGroupItems
@@ -358,7 +363,7 @@ class _GroupScreenState extends State<GroupScreen> {
                       ),
                     ),
                     Text(
-                      'D-${item.daysRemaining}',
+                      formatDdayLabel(item.daysRemaining),
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,

@@ -8,6 +8,8 @@ import '../widgets/reports/month_filter_list_view.dart';
 import '../widgets/reports/monthly_bar_chart.dart';
 import '../widgets/reports/share_action_button.dart';
 
+enum _ReportPeriod { monthly, yearly }
+
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
 
@@ -29,10 +31,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
   // 는 16ms 프레임 예산 대비 무시 가능. async ReportService 도입 시
   // 캐싱은 repository 레이어로 이전한다.
   DateTime? _selectedMonth;
+  _ReportPeriod _period = _ReportPeriod.monthly;
+  int _selectedYear = DateTime.now().year;
 
   void _onMonthTap(DateTime m) {
     setState(() {
       _selectedMonth = _selectedMonth == m ? null : m;
+    });
+  }
+
+  void _onPeriodChanged(Set<_ReportPeriod> selected) {
+    if (selected.isEmpty) return;
+    setState(() {
+      _period = selected.first;
+      _selectedMonth = null;
+    });
+  }
+
+  void _changeYear(int delta) {
+    setState(() {
+      _selectedYear += delta;
+      _selectedMonth = null;
     });
   }
 
@@ -43,21 +62,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
       if (i > 0 && (str.length - i) % 3 == 0) buffer.write(',');
       buffer.write(str[i]);
     }
-    return '${buffer}원';
+    return '$buffer원';
   }
 
   @override
   Widget build(BuildContext context) {
     final service = ReportService.fromItems(SampleData.items);
     final months = service.aggregateRecentMonths();
+    final yearly = service.aggregateYear(_selectedYear);
     // 요약/파이/상세는 지출이 있는 최신 월을 우선 사용해 "빈 현재 월 → 0원"
     // UX 회귀를 피한다. 전부 0원이면 months.last로 fallback.
     final latest =
         service.latestMonthlyWithSpending() ??
         (months.isEmpty ? null : months.last);
-    final breakdown = latest == null
+    final monthlyBreakdown = latest == null
         ? const <CategoryBreakdown>[]
         : service.categoryBreakdownFor(latest.month);
+    final yearlyBreakdown = service.categoryBreakdownForYear(_selectedYear);
+    final isYearly = _period == _ReportPeriod.yearly;
+    final chartData = isYearly ? yearly.months : months;
+    final breakdown = isYearly ? yearlyBreakdown : monthlyBreakdown;
 
     // `_selectedMonth`는 순수 widget state 로 보관되므로 IndexedStack 하에서
     // 앱 수명만큼 유지된다. 월 경계 교차 또는 데이터 동기화로 aggregateRecentMonths
@@ -65,15 +89,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
     // 해당 월이 없는" 모순 상태가 발생할 수 있다 (Codex review v3.2 HIGH finding).
     // 매 build 에서 months 와 교차 검증하여 유효 월만 하위 위젯으로 내려보낸다.
     final effectiveSelectedMonth =
-        _selectedMonth != null && months.any((m) => m.month == _selectedMonth)
+        _selectedMonth != null &&
+            chartData.any((m) => m.month == _selectedMonth)
         ? _selectedMonth
         : null;
 
-    final latestTitle = latest == null
+    final latestTitle = isYearly
+        ? '연간 지출 현황'
+        : latest == null
         ? '지출 현황'
         : '${latest.month.month}월 지출 현황';
-    final latestYear = latest == null ? '-' : '${latest.month.year}';
-    final latestTotal = latest?.totalAmount ?? 0;
+    final latestYear = isYearly
+        ? '$_selectedYear년'
+        : latest == null
+        ? '-'
+        : '${latest.month.year}';
+    final latestTotal = isYearly
+        ? yearly.totalAmount
+        : latest?.totalAmount ?? 0;
+    final chartTitle = isYearly ? '연간 월별 지출' : '월별 지출 추이';
+    final detailTitle = isYearly ? '연간 카테고리 상세' : '카테고리별 상세';
 
     return SafeArea(
       child: CustomScrollView(
@@ -89,6 +124,60 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   ShareActionButton(service: service),
+                ],
+              ),
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SegmentedButton<_ReportPeriod>(
+                      segments: const [
+                        ButtonSegment(
+                          value: _ReportPeriod.monthly,
+                          label: Text('월간'),
+                          icon: Icon(Icons.calendar_view_month_outlined),
+                        ),
+                        ButtonSegment(
+                          value: _ReportPeriod.yearly,
+                          label: Text('연간'),
+                          icon: Icon(Icons.calendar_today_outlined),
+                        ),
+                      ],
+                      selected: {_period},
+                      showSelectedIcon: false,
+                      onSelectionChanged: _onPeriodChanged,
+                      style: ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: WidgetStateProperty.resolveWith<Color>(
+                          (states) {
+                            return states.contains(WidgetState.selected)
+                                ? Colors.white
+                                : AppColors.textSecondary;
+                          },
+                        ),
+                        backgroundColor: WidgetStateProperty.resolveWith<Color>(
+                          (states) {
+                            return states.contains(WidgetState.selected)
+                                ? AppColors.primary
+                                : AppColors.surface;
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (isYearly) ...[
+                    const SizedBox(width: 10),
+                    _YearControl(
+                      year: _selectedYear,
+                      onPrevious: () => _changeYear(-1),
+                      onNext: () => _changeYear(1),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -157,7 +246,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   color: AppColors.primaryLight2,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: AppColors.primary.withOpacity(0.2),
+                    color: AppColors.primary.withValues(alpha: 0.2),
                     width: 0.5,
                   ),
                 ),
@@ -167,7 +256,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.15),
+                        color: AppColors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
@@ -207,7 +296,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           ),
 
-          // Monthly comparison bar chart
+          // Spending trend bar chart
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
@@ -221,9 +310,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '월별 지출 추이',
-                      style: TextStyle(
+                    Text(
+                      chartTitle,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: AppColors.text,
@@ -231,9 +320,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     ),
                     const SizedBox(height: 20),
                     MonthlyBarChart(
-                      data: months,
+                      data: chartData,
                       selectedMonth: effectiveSelectedMonth,
                       onMonthTap: _onMonthTap,
+                      highlightLatest: !isYearly,
                     ),
                   ],
                 ),
@@ -245,9 +335,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-              child: const Text(
-                '카테고리별 상세',
-                style: TextStyle(
+              child: Text(
+                detailTitle,
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: AppColors.text,
@@ -259,7 +349,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             sliver: SliverList.separated(
               itemCount: breakdown.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final c = breakdown[index];
                 final color = colorForCategory(c.category);
@@ -280,7 +370,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.12),
+                          color: color.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Center(
@@ -356,6 +446,59 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
+      ),
+    );
+  }
+}
+
+class _YearControl extends StatelessWidget {
+  const _YearControl({
+    required this.year,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final int year;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: '이전 연도',
+            constraints: const BoxConstraints.tightFor(width: 36, height: 40),
+            padding: EdgeInsets.zero,
+            onPressed: onPrevious,
+            icon: const Icon(Icons.chevron_left, size: 20),
+            color: AppColors.textSecondary,
+          ),
+          Text(
+            '$year년',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.text,
+            ),
+          ),
+          IconButton(
+            tooltip: '다음 연도',
+            constraints: const BoxConstraints.tightFor(width: 36, height: 40),
+            padding: EdgeInsets.zero,
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right, size: 20),
+            color: AppColors.textSecondary,
+          ),
         ],
       ),
     );

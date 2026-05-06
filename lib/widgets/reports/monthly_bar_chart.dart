@@ -11,11 +11,13 @@ class MonthlyBarChart extends StatelessWidget {
     required this.data,
     this.onMonthTap,
     this.selectedMonth,
+    this.highlightLatest = true,
   });
 
   final List<MonthlySpending> data;
   final void Function(DateTime month)? onMonthTap;
   final DateTime? selectedMonth;
+  final bool highlightLatest;
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +98,7 @@ class MonthlyBarChart extends StatelessWidget {
             final isLatest = entry.key == data.length - 1;
             final isSelected =
                 selectedMonth != null && entry.value.month == selectedMonth;
-            final highlighted = isSelected || isLatest;
+            final highlighted = isSelected || (highlightLatest && isLatest);
             return BarChartGroupData(
               x: entry.key,
               barRods: [
@@ -105,7 +107,7 @@ class MonthlyBarChart extends StatelessWidget {
                   width: 28,
                   color: highlighted
                       ? AppColors.primary
-                      : AppColors.primary.withOpacity(0.3),
+                      : AppColors.primary.withValues(alpha: 0.3),
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(6),
                     topRight: Radius.circular(6),

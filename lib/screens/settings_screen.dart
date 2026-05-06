@@ -29,7 +29,7 @@ class SettingsScreen extends StatelessWidget {
                     radius: 28,
                     backgroundColor: AppColors.primary,
                     child: const Text(
-                      '민',
+                      '사',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -43,7 +43,7 @@ class SettingsScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '김민수',
+                          '사용자',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
@@ -52,7 +52,7 @@ class SettingsScreen extends StatelessWidget {
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'minsu@email.com',
+                          '계정 정보 없음',
                           style: TextStyle(
                             fontSize: 13,
                             color: AppColors.textMuted,
@@ -103,7 +103,7 @@ class SettingsScreen extends StatelessWidget {
                 trailing: Switch(
                   value: true,
                   onChanged: (_) {},
-                  activeColor: AppColors.primary,
+                  activeThumbColor: AppColors.primary,
                 ),
               ),
               _settingsTile(
@@ -113,7 +113,7 @@ class SettingsScreen extends StatelessWidget {
                 trailing: Switch(
                   value: true,
                   onChanged: (_) {},
-                  activeColor: AppColors.primary,
+                  activeThumbColor: AppColors.primary,
                 ),
               ),
             ]),
