@@ -153,7 +153,7 @@ class _ScanScreenState extends State<ScanScreen>
                     child: Icon(
                       Icons.receipt_long_outlined,
                       size: 80,
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                     ),
                   ),
                   Positioned(
@@ -239,7 +239,7 @@ class _ScanScreenState extends State<ScanScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.2),
+                        color: AppColors.primary.withValues(alpha: 0.2),
                         blurRadius: 20 + _pulseController.value * 10,
                         spreadRadius: _pulseController.value * 5,
                       ),

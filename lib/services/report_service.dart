@@ -58,6 +58,16 @@ class ReportService {
     }).toList();
   }
 
+  /// 선택 연도의 1월→12월 지출 집계.
+  YearlySpending aggregateYear(int year) {
+    final months = <MonthlySpending>[
+      for (var month = 1; month <= 12; month++)
+        _aggregateMonth(DateTime(year, month, 1)),
+    ];
+
+    return YearlySpending(year: year, months: months);
+  }
+
   /// 특정 월의 카테고리 breakdown (ratio 포함). 데이터 없으면 빈 리스트.
   List<CategoryBreakdown> categoryBreakdownFor(DateTime month) {
     final key = _monthKey(month);
@@ -67,6 +77,35 @@ class ReportService {
     for (final item in source) {
       for (final pr in item.purchaseHistory) {
         if (_monthKey(pr.date) == key) {
+          total += pr.price;
+          byCategory[item.category] =
+              (byCategory[item.category] ?? 0) + pr.price;
+        }
+      }
+    }
+
+    if (total == 0) return const <CategoryBreakdown>[];
+
+    return byCategory.entries
+        .map(
+          (e) => CategoryBreakdown(
+            category: e.key,
+            amount: e.value,
+            ratio: e.value / total,
+          ),
+        )
+        .toList()
+      ..sort((a, b) => b.amount.compareTo(a.amount));
+  }
+
+  /// 선택 연도 전체의 카테고리 breakdown.
+  List<CategoryBreakdown> categoryBreakdownForYear(int year) {
+    var total = 0;
+    final byCategory = <String, int>{};
+
+    for (final item in source) {
+      for (final pr in item.purchaseHistory) {
+        if (pr.date.year == year) {
           total += pr.price;
           byCategory[item.category] =
               (byCategory[item.category] ?? 0) + pr.price;
@@ -110,6 +149,32 @@ class ReportService {
         )
         .toList();
   }
+
+  MonthlySpending _aggregateMonth(DateTime bucket) {
+    var total = 0;
+    final byCategory = <String, int>{};
+    final itemsInBucket = <ConsumableItem>[];
+
+    for (final item in source) {
+      var matched = false;
+      for (final pr in item.purchaseHistory) {
+        if (_monthKey(pr.date) == bucket) {
+          total += pr.price;
+          byCategory[item.category] =
+              (byCategory[item.category] ?? 0) + pr.price;
+          matched = true;
+        }
+      }
+      if (matched) itemsInBucket.add(item);
+    }
+
+    return MonthlySpending(
+      month: bucket,
+      totalAmount: total,
+      byCategory: byCategory,
+      items: itemsInBucket,
+    );
+  }
 }
 
 class MonthlySpending {
@@ -124,6 +189,16 @@ class MonthlySpending {
     required this.byCategory,
     required this.items,
   });
+}
+
+class YearlySpending {
+  final int year;
+  final List<MonthlySpending> months;
+
+  const YearlySpending({required this.year, required this.months});
+
+  int get totalAmount =>
+      months.fold<int>(0, (sum, month) => sum + month.totalAmount);
 }
 
 class CategoryBreakdown {

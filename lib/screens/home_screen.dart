@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../models/item.dart';
 import '../services/item_store.dart';
+import '../services/recent_purchase_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/home/home_hero_card.dart';
 import '../widgets/home/upcoming_item_row.dart';
@@ -25,7 +26,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const _userName = '지민';
+  static const _userName = '사용자';
 
   void _goToItemsTab() {
     final root = context.findAncestorStateOfType<MainNavigationState>();
@@ -68,6 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final hero = sorted.first;
           final upcoming = sorted.skip(1).take(4).toList();
           final weekCount = items.where((i) => i.daysRemaining <= 7).length;
+          final recentRows = RecentPurchaseService.fromItems(items);
 
           return CustomScrollView(
             slivers: [
@@ -124,18 +126,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
               const SliverToBoxAdapter(child: _SectionHeader(title: '최근 기록')),
-              // TODO: 디자인 프로토타입 mock. 실제 활동 로그(ItemStore 변경
-              // 이력 등) 연결 시 교체.
-              const SliverPadding(
-                padding: EdgeInsets.fromLTRB(20, 10, 20, 8),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
                 sliver: SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-                      _LedgerRow(time: '오늘 14:22', text: '이마트 영수증 3개 항목 자동 추가'),
-                      _LedgerRow(time: '04.18', text: '치약 구매 기록됨'),
-                      _LedgerRow(time: '04.01', text: '세탁세제 주기 45일로 업데이트'),
-                    ],
-                  ),
+                  child: recentRows.isEmpty
+                      ? const _RecentEmptyState()
+                      : Column(
+                          children: [
+                            for (final row in recentRows)
+                              _LedgerRow(
+                                time: _formatRecentDate(row.date),
+                                text: _formatRecentText(row),
+                              ),
+                          ],
+                        ),
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 28)),
@@ -144,6 +148,36 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       ),
     );
+  }
+
+  String _formatRecentDate(DateTime date) {
+    final today = DateTime.now();
+    if (date.year == today.year &&
+        date.month == today.month &&
+        date.day == today.day) {
+      return '오늘';
+    }
+
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$month.$day';
+  }
+
+  String _formatRecentText(RecentPurchaseRecord record) {
+    final store = record.store.trim().isEmpty ? '구매처 미입력' : record.store;
+    return '${record.itemName} 구매 기록됨 · $store · ${_formatPrice(record.price)}';
+  }
+
+  String _formatPrice(int price) {
+    final digits = price.toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) {
+        buffer.write(',');
+      }
+      buffer.write(digits[i]);
+    }
+    return '$buffer원';
   }
 }
 
@@ -339,6 +373,28 @@ class _LedgerRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RecentEmptyState extends StatelessWidget {
+  const _RecentEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          '최근 기록이 없습니다.',
+          style: TextStyle(
+            fontSize: 13,
+            height: 1.5,
+            color: AppColors.textMuted,
+          ),
+        ),
       ),
     );
   }

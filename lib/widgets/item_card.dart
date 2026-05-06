@@ -96,7 +96,7 @@ class PurchaseListItem extends StatelessWidget {
       if (i > 0 && (str.length - i) % 3 == 0) buffer.write(',');
       buffer.write(str[i]);
     }
-    return '${buffer}원';
+    return '$buffer원';
   }
 
   @override

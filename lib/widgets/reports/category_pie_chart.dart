@@ -6,9 +6,14 @@ import '../../theme/app_theme.dart';
 
 const Map<String, Color> _categoryPalette = <String, Color>{
   '위생': Color(0xFF0891B2),
+  '욕실/위생': Color(0xFF0891B2),
   '필터': Color(0xFF059669),
+  '가전/필터': Color(0xFF059669),
   '세탁': Color(0xFFD97706),
+  '세탁/청소': Color(0xFFD97706),
   '주방': Color(0xFF7C3AED),
+  '주방/세제': Color(0xFF7C3AED),
+  '헤어/바디': Color(0xFFDB2777),
   '기타': Color(0xFFEC4899),
 };
 
@@ -76,9 +81,11 @@ class CategoryPieChart extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     SizedBox(
-                      width: 35,
+                      width: 72,
                       child: Text(
                         c.category,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,

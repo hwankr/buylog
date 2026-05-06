@@ -11,19 +11,15 @@ import '../models/item.dart';
 class SupabaseService {
   static const _supabaseUrl = 'https://fervijwxdgkwjtcpzskx.supabase.co';
   static const _anonKey = 'sb_publishable_FO7WmA_Pu4RsGgsfRJzssQ_f0orCu7w';
-  // flutter run 시 --dart-define=SUPABASE_SERVICE_KEY=sb_secret_... 로 주입
-  static const _serviceKey = String.fromEnvironment('SUPABASE_SERVICE_KEY');
   static const _storageBucket = 'product-images';
 
   static SupabaseClient get _db => Supabase.instance.client;
 
-  /// Storage 업로드 전용 어드민 클라이언트 (service role — RLS 우회)
-  ///
-  /// ⚠️ 프로덕션에서는 서버사이드(Edge Function 등)에서만 사용해야 합니다.
-  static final _adminClient = SupabaseClient(_supabaseUrl, _serviceKey);
-
   /// 카테고리 이름 → UUID 로컬 캐시 (앱 세션 동안 유지)
   static final Map<String, String> _categoryCache = {};
+
+  @visibleForTesting
+  static ProductImageStorageGateway? debugImageStorageGateway;
 
   // ────────────────────────────────────────────────────────────────────────────
   // 초기화 & 인증
@@ -49,28 +45,26 @@ class SupabaseService {
   ///
   /// [imageBytes] 업로드할 이미지 바이트 (image_picker로 획득)
   /// [itemId]     제품 UUID (파일 경로에 사용)
-  static Future<String?> uploadItemImage({
+  static Future<String> uploadItemImage({
     required Uint8List imageBytes,
     required String itemId,
   }) async {
     try {
       final path = 'items/$itemId.jpg';
-      await _adminClient.storage
-          .from(_storageBucket)
-          .uploadBinary(
-            path,
-            imageBytes,
-            fileOptions: const FileOptions(
-              contentType: 'image/jpeg',
-              upsert: true,
-            ),
-          );
-      final url = _adminClient.storage.from(_storageBucket).getPublicUrl(path);
+      final storage =
+          debugImageStorageGateway ??
+          ProductImageStorageGateway.fromClient(_db, _storageBucket);
+      await storage.uploadBinary(
+        path,
+        imageBytes,
+        const FileOptions(contentType: 'image/jpeg', upsert: true),
+      );
+      final url = storage.getPublicUrl(path);
       debugPrint('[Supabase] 이미지 업로드 완료: $url');
       return url;
     } catch (e) {
       debugPrint('[Supabase] 이미지 업로드 오류: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -273,4 +267,42 @@ class SupabaseService {
       _ => 'category',
     };
   }
+}
+
+abstract class ProductImageStorageGateway {
+  factory ProductImageStorageGateway.fromClient(
+    SupabaseClient client,
+    String bucket,
+  ) = _SupabaseProductImageStorageGateway;
+
+  Future<void> uploadBinary(
+    String path,
+    Uint8List imageBytes,
+    FileOptions fileOptions,
+  );
+
+  String getPublicUrl(String path);
+}
+
+class _SupabaseProductImageStorageGateway
+    implements ProductImageStorageGateway {
+  _SupabaseProductImageStorageGateway(this._client, this._bucket);
+
+  final SupabaseClient _client;
+  final String _bucket;
+
+  @override
+  Future<void> uploadBinary(
+    String path,
+    Uint8List imageBytes,
+    FileOptions fileOptions,
+  ) async {
+    await _client.storage
+        .from(_bucket)
+        .uploadBinary(path, imageBytes, fileOptions: fileOptions);
+  }
+
+  @override
+  String getPublicUrl(String path) =>
+      _client.storage.from(_bucket).getPublicUrl(path);
 }

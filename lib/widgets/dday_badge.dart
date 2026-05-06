@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../utils/dday_format.dart';
 
 class DdayBadge extends StatelessWidget {
   final int daysRemaining;
@@ -30,7 +31,7 @@ class DdayBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        'D-$daysRemaining',
+        formatDdayLabel(daysRemaining),
         style: TextStyle(
           color: _textColor,
           fontSize: fontSize,

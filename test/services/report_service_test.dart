@@ -196,6 +196,125 @@ void main() {
     });
   });
 
+  group('ReportService annual reports', () {
+    test('aggregateYear returns 12 month buckets and annual total', () {
+      final fixture = <ConsumableItem>[
+        ConsumableItem(
+          id: 'a',
+          name: '세제',
+          brand: 'x',
+          category: '세탁',
+          icon: Icons.circle,
+          daysRemaining: 0,
+          cycleDays: 30,
+          progress: 0.5,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 1, 12),
+              price: 10000,
+              store: 's',
+            ),
+            PurchaseRecord(
+              date: DateTime(2026, 3, 15),
+              price: 15000,
+              store: 's',
+            ),
+            PurchaseRecord(
+              date: DateTime(2025, 12, 30),
+              price: 99999,
+              store: 's',
+            ),
+          ],
+        ),
+        ConsumableItem(
+          id: 'b',
+          name: '필터',
+          brand: 'x',
+          category: '필터',
+          icon: Icons.circle,
+          daysRemaining: 0,
+          cycleDays: 30,
+          progress: 0.5,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 3, 20),
+              price: 8000,
+              store: 's',
+            ),
+          ],
+        ),
+      ];
+
+      final service = ReportService.fromItems(fixture);
+      final yearly = service.aggregateYear(2026);
+
+      expect(yearly.year, 2026);
+      expect(yearly.months.length, 12);
+      expect(yearly.months.first.month, DateTime(2026, 1, 1));
+      expect(yearly.months.last.month, DateTime(2026, 12, 1));
+      expect(yearly.totalAmount, 33000);
+      expect(yearly.months[0].totalAmount, 10000);
+      expect(yearly.months[2].totalAmount, 23000);
+      expect(yearly.months[11].totalAmount, 0);
+    });
+
+    test('categoryBreakdownForYear aggregates only the selected year', () {
+      final service = ReportService.fromItems(<ConsumableItem>[
+        ConsumableItem(
+          id: 'a',
+          name: '세제',
+          brand: 'x',
+          category: '세탁',
+          icon: Icons.circle,
+          daysRemaining: 0,
+          cycleDays: 30,
+          progress: 0.5,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 2, 1),
+              price: 12000,
+              store: 's',
+            ),
+            PurchaseRecord(
+              date: DateTime(2025, 2, 1),
+              price: 99000,
+              store: 's',
+            ),
+          ],
+        ),
+        ConsumableItem(
+          id: 'b',
+          name: '필터',
+          brand: 'x',
+          category: '필터',
+          icon: Icons.circle,
+          daysRemaining: 0,
+          cycleDays: 30,
+          progress: 0.5,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 2, 5),
+              price: 18000,
+              store: 's',
+            ),
+          ],
+        ),
+      ]);
+
+      final breakdown = service.categoryBreakdownForYear(2026);
+
+      expect(breakdown.length, 2);
+      expect(breakdown[0].category, '필터');
+      expect(breakdown[0].amount, 18000);
+      expect(breakdown[1].category, '세탁');
+      expect(breakdown[1].amount, 12000);
+      expect(
+        breakdown.fold<double>(0, (sum, item) => sum + item.ratio),
+        closeTo(1.0, 0.001),
+      );
+    });
+  });
+
   group('ReportService.latestMonthlyWithSpending', () {
     // 회귀: 현재 월 구매가 없으면 months.last가 0원 버킷이 되어 요약 화면이
     // "0원"으로 무너지는 문제(Codex adversarial review Finding 2). 이 메서드는

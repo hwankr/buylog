@@ -87,5 +87,22 @@ void main() {
       expect(colors[1], isNot(_highlightColor));
       expect(colors[2], _highlightColor);
     });
+
+    testWidgets('highlightLatest=false → 선택 월만 진한 색', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          MonthlyBarChart(
+            data: _fixture(),
+            selectedMonth: DateTime(2026, 1, 1),
+            highlightLatest: false,
+          ),
+        ),
+      );
+
+      final colors = _readBarColors(tester);
+      expect(colors[0], _highlightColor);
+      expect(colors[1], isNot(_highlightColor));
+      expect(colors[2], isNot(_highlightColor));
+    });
   });
 }
