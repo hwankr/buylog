@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../widgets/item_card.dart';
 import '../models/item.dart';
+import '../services/item_store.dart';
 import 'item_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -28,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _fetchDbData(isInitial: true);
+    ItemStore.instance.addListener(_syncFromStore);
 
     // 스크롤 리스너 등록: 사용자가 끝까지 내렸는지 확인
     _scrollController.addListener(() {
@@ -42,8 +44,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _scrollController.dispose(); // 메모리 누수 방지
+    ItemStore.instance.removeListener(_syncFromStore);
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  // ItemStore 변경(수정/삭제) 시 로컬 _items 동기화
+  void _syncFromStore() {
+    if (!mounted) return;
+    setState(() {
+      _items = _items
+          .where((i) => ItemStore.instance.findById(i.id) != null)
+          .map((i) => ItemStore.instance.findById(i.id)!)
+          .toList();
+    });
   }
 
   // Supabase 페이지네이션 쿼리 함수

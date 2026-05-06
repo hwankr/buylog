@@ -192,6 +192,22 @@ class SupabaseService {
   }
 
   // ────────────────────────────────────────────────────────────────────────────
+  // 구매 이력 삭제
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /// 지정한 purchases.id 목록을 DB에서 삭제합니다.
+  static Future<void> deletePurchases(Set<String> ids) async {
+    if (ids.isEmpty) return;
+    try {
+      await _db.from('purchases').delete().inFilter('id', ids.toList());
+      debugPrint('[Supabase] deletePurchases 완료: ${ids.length}건');
+    } catch (e) {
+      debugPrint('[Supabase] deletePurchases 오류: $e');
+      rethrow;
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
   // 카테고리 조회 또는 생성
   // ────────────────────────────────────────────────────────────────────────────
 
