@@ -17,8 +17,9 @@ class _ScanScreenState extends State<ScanScreen>
   late AnimationController _pulseController;
 
   // OCR 결과 상태 (스캔 완료 후 편집 가능)
-  final TextEditingController _storeCtrl =
-      TextEditingController(text: '이마트 성수점');
+  final TextEditingController _storeCtrl = TextEditingController(
+    text: '이마트 성수점',
+  );
   DateTime _scanDate = DateTime(2026, 4, 8);
   final List<_OcrItemEntry> _ocrItems = [];
   bool _isSaving = false;
@@ -84,8 +85,10 @@ class _ScanScreenState extends State<ScanScreen>
     setState(() => _isSaving = true);
     try {
       for (final ocrItem in _ocrItems) {
-        final priceText =
-            ocrItem.priceCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+        final priceText = ocrItem.priceCtrl.text.replaceAll(
+          RegExp(r'[^0-9]'),
+          '',
+        );
         final price = int.tryParse(priceText);
         if (!mounted) break;
         await Navigator.push<void>(
@@ -283,12 +286,13 @@ class _ScanScreenState extends State<ScanScreen>
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle, color: AppColors.success, size: 24),
-              const SizedBox(width: 8),
-              Text(
-                '스캔 완료',
-                style: Theme.of(context).textTheme.headlineMedium,
+              const Icon(
+                Icons.check_circle,
+                color: AppColors.success,
+                size: 24,
               ),
+              const SizedBox(width: 8),
+              Text('스캔 완료', style: Theme.of(context).textTheme.headlineMedium),
             ],
           ),
           const SizedBox(height: 6),
@@ -513,8 +517,10 @@ class _ScanScreenState extends State<ScanScreen>
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: AppColors.primary, width: 1.5),
+              borderSide: const BorderSide(
+                color: AppColors.primary,
+                width: 1.5,
+              ),
             ),
           ),
         ),
@@ -558,8 +564,8 @@ class _OcrItemEntry {
   final TextEditingController priceCtrl;
 
   _OcrItemEntry(String name, int price)
-      : nameCtrl = TextEditingController(text: name),
-        priceCtrl = TextEditingController(text: price.toString());
+    : nameCtrl = TextEditingController(text: name),
+      priceCtrl = TextEditingController(text: price.toString());
 
   void dispose() {
     nameCtrl.dispose();

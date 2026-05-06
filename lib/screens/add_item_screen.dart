@@ -291,11 +291,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
           );
 
           if (shouldMerge == true) {
-            final newPurchases = purchases.map((p) => PurchaseRecord(
-                  date: p.date,
-                  price: p.price,
-                  store: p.store,
-                )).toList();
+            final newPurchases = purchases
+                .map(
+                  (p) => PurchaseRecord(
+                    date: p.date,
+                    price: p.price,
+                    store: p.store,
+                  ),
+                )
+                .toList();
             final merged = ConsumableItem(
               id: duplicate.id,
               name: duplicate.name,
