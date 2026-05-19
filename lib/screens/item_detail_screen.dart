@@ -5,6 +5,9 @@ import '../services/item_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/countdown_ring.dart';
 import 'add_item_screen.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ItemDetailScreen extends StatefulWidget {
   final ConsumableItem item;
@@ -18,11 +21,65 @@ class ItemDetailScreen extends StatefulWidget {
 class _ItemDetailScreenState extends State<ItemDetailScreen> {
   late ConsumableItem _item;
 
+  // 실시간 가격 데이터 변수
+  bool _isLoadingPrice = true;
+  List<PriceComparison> _realPriceData = [];
+  String? _buyLink; // 구매 링크 저장용
+
   @override
   void initState() {
     super.initState();
     _item = widget.item;
     ItemStore.instance.addListener(_onStoreChanged);
+
+    _fetchRealTimePrice();
+  }
+
+  Future<void> _fetchRealTimePrice() async {
+    final String clientId = dotenv.env['NAVER_CLIENT_ID'] ?? '';
+    final String clientSecret = dotenv.env['NAVER_CLIENT_SECRET'] ?? '';
+
+    debugPrint('✅ ENV 로드 테스트: ${clientId.isNotEmpty ? "성공 (키 들어옴)" : "실패 (키 비어있음)"}');
+    
+    // 제품 이름으로 네이버 쇼핑 검색
+    final url = 'https://openapi.naver.com/v1/search/shop.json?query=${_item.name}&display=3';
+
+    try {
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'X-Naver-Client-Id': clientId,
+          'X-Naver-Client-Secret': clientSecret,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final items = data['items'] as List;
+
+        if (items.isNotEmpty) {
+          final firstItem = items[0];
+          
+          // 받아온 데이터를 PriceComparison 객체로 변환
+          final lowestPrice = PriceComparison(
+            store: '네이버쇼핑 최저가', 
+            price: int.parse(firstItem['lprice']),
+            isLowest: true,
+          );
+
+          if (mounted) {
+            setState(() {
+              _realPriceData = [lowestPrice];
+              _buyLink = firstItem['link'];   // 링크 저장
+              _isLoadingPrice = false;        // 로딩 끝
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('가격 파싱 실패: $e');
+      if (mounted) setState(() => _isLoadingPrice = false);
+    }
   }
 
   @override

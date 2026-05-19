@@ -12,6 +12,11 @@ import 'screens/add_item_screen.dart';
 import 'services/supabase_service.dart';
 import 'services/item_store.dart';
 
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -27,6 +32,9 @@ Future<void> main() async {
 
   // 제품 목록 초기 로드
   await ItemStore.instance.initialize();
+
+  // 환경변수 로드
+  await dotenv.load(fileName: ".env");
 
   runApp(const BuylogApp());
 }
