@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../data/sample_data.dart';
+
 import '../models/item.dart';
 import '../services/item_store.dart';
 import '../theme/app_theme.dart';
@@ -8,7 +8,8 @@ import 'add_item_screen.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:url_launcher/url_launcher.dart'; // 👈 맨 위에 추가
+import 'package:url_launcher/url_launcher.dart';
+import '../models/price_cache_data.dart';
 
 class ItemDetailScreen extends StatefulWidget {
   final ConsumableItem item;
@@ -20,6 +21,9 @@ class ItemDetailScreen extends StatefulWidget {
 }
 
 class _ItemDetailScreenState extends State<ItemDetailScreen> {
+  
+  static final Map<String, PriceCacheData> _priceCache = {};
+  
   late ConsumableItem _item;
 
   // 실시간 가격 데이터 변수
