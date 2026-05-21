@@ -10,12 +10,14 @@ import '../theme/app_theme.dart';
 /// OCR 스캔 결과에서 전달받는 사전 입력 데이터
 class OcrPrefillData {
   final String? productName;
+  final String? brandName;
   final int? price;
   final String? storeName;
   final DateTime? purchaseDate;
 
   const OcrPrefillData({
     this.productName,
+    this.brandName,
     this.price,
     this.storeName,
     this.purchaseDate,
@@ -92,7 +94,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     } else {
       // 신규 등록 모드: OCR 데이터 또는 빈 값으로 초기화
       _nameCtrl = TextEditingController(text: p?.productName ?? '');
-      _brandCtrl = TextEditingController();
+      _brandCtrl = TextEditingController(text: p?.brandName ?? '');
       _cycleDaysCtrl = TextEditingController(
         text: getDefaultDays(_selectedCategory).toString(),
       );

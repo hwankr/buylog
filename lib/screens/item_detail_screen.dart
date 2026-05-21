@@ -36,48 +36,116 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _fetchRealTimePrice() async {
-    final String clientId = dotenv.env['NAVER_CLIENT_ID'] ?? '';
-    final String clientSecret = dotenv.env['NAVER_CLIENT_SECRET'] ?? '';
+    final String naverId = dotenv.env['NAVER_CLIENT_ID'] ?? '';
+    final String naverSecret = dotenv.env['NAVER_CLIENT_SECRET'] ?? '';
+    final String openaiKey = dotenv.env['OPENAI_API_KEY'] ?? '';
 
-    debugPrint('✅ ENV 로드 테스트: ${clientId.isNotEmpty ? "성공 (키 들어옴)" : "실패 (키 비어있음)"}');
+    if (naverId.isEmpty || naverSecret.isEmpty || openaiKey.isEmpty) {
+      debugPrint('API 키가 설정되지 않았습니다.');
+      if (mounted) setState(() => _isLoadingPrice = false);
+      return;
+    }
+
+    // 네이버 쇼핑 검색 API 호출
+    final String searchQuery = '${_item.brand} ${_item.name}'.trim();
+    final naverUrl = 'https://openapi.naver.com/v1/search/shop.json?query=${Uri.encodeComponent(searchQuery)}&display=1';
     
-    // 제품 이름으로 네이버 쇼핑 검색
-    final url = 'https://openapi.naver.com/v1/search/shop.json?query=${_item.name}&display=3';
-
     try {
-      final response = await http.get(
-        Uri.parse(url),
+      final naverResponse = await http.get(
+        Uri.parse(naverUrl),
         headers: {
-          'X-Naver-Client-Id': clientId,
-          'X-Naver-Client-Secret': clientSecret,
+          'X-Naver-Client-Id': naverId,
+          'X-Naver-Client-Secret': naverSecret,
         },
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final items = data['items'] as List;
+      if (naverResponse.statusCode == 200) {
+        final naverData = jsonDecode(utf8.decode(naverResponse.bodyBytes));
+        final items = naverData['items'] as List;
 
         if (items.isNotEmpty) {
           final firstItem = items[0];
-          
-          // 받아온 데이터를 PriceComparison 객체로 변환
-          final lowestPrice = PriceComparison(
-            store: '네이버쇼핑 최저가', 
-            price: int.parse(firstItem['lprice']),
-            isLowest: true,
+          final String rawTitle = firstItem['title'];
+          final int totalPrice = int.parse(firstItem['lprice']);
+          final String link = firstItem['link'];
+
+          // 쇼핑몰 이름
+          final String mallName = firstItem['mallName'];
+
+          // OpenAI Structured Outputs로 데이터 정제 요청
+          const openaiUrl = 'https://api.openai.com/v1/chat/completions';
+          final openaiResponse = await http.post(
+            Uri.parse(openaiUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $openaiKey',
+            },
+            body: jsonEncode({
+              'model': 'gpt-4o-mini',
+              'messages': [
+                {
+                  'role': 'system',
+                  'content': '너는 쇼핑 데이터 분석가야. 상품명에서 총 수량(개수)을 파악하고 단가를 계산해 무조건 지정된 JSON 스키마로만 응답해.'
+                },
+                {
+                  'role': 'user',
+                  'content': '상품명: $rawTitle, 전체가격: $totalPrice원'
+                }
+              ],
+              'response_format': {
+                'type': 'json_schema',
+                'json_schema': {
+                  'name': 'product_analysis',
+                  'strict': true,
+                  'schema': {
+                    'type': 'object',
+                    'properties': {
+                      'total_count': {'type': 'integer'},
+                      'unit_price': {'type': 'integer'},
+                      'pure_name': {'type': 'string'}
+                    },
+                    'required': ['total_count', 'unit_price', 'pure_name'],
+                    'additionalProperties': false
+                  }
+                }
+              }
+            }),
           );
 
-          if (mounted) {
-            setState(() {
-              _realPriceData = [lowestPrice];
-              _buyLink = firstItem['link'];   // 링크 저장
-              _isLoadingPrice = false;        // 로딩 끝
-            });
+          if (openaiResponse.statusCode == 200) {
+            final openaiData = jsonDecode(utf8.decode(openaiResponse.bodyBytes));
+            final String aiJsonString = openaiData['choices'][0]['message']['content'];
+            final Map<String, dynamic> aiResult = jsonDecode(aiJsonString);
+
+            // AI가 계산해 준 단가를 UI 모델에 매핑
+            final int unitPrice = aiResult['unit_price'];
+            final int totalCount = aiResult['total_count'];
+            final String pureName = aiResult['pure_name'];
+
+            
+            final lowestPrice = PriceComparison(
+              store: '[$mallName] $pureName (총 $totalCount개 / 개당 $unitPrice원)', 
+              price: totalPrice,
+              isLowest: true,
+            );
+
+            if (mounted) {
+              setState(() {
+                _realPriceData = [lowestPrice];
+                _buyLink = link; // 나중에 터치 시 이동할 링크 저장
+                _isLoadingPrice = false;
+              });
+            }
+            return;
           }
         }
       }
+      
+      // 검색 결과가 없거나 통신 에러 시 예외 처리
+      if (mounted) setState(() => _isLoadingPrice = false);
+      
     } catch (e) {
-      debugPrint('가격 파싱 실패: $e');
+      debugPrint('통신 및 파싱 에러: $e');
       if (mounted) setState(() => _isLoadingPrice = false);
     }
   }
@@ -433,47 +501,59 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          ...SampleData.priceComparisons.map(
-            (p) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: [
-                  if (p.isLowest)
-                    const Icon(
-                      Icons.check_circle,
-                      size: 16,
-                      color: AppColors.success,
-                    )
-                  else
-                    const SizedBox(width: 16),
-                  const SizedBox(width: 10),
-                  Text(
-                    p.store,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: p.isLowest
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                      color: p.isLowest
-                          ? AppColors.text
-                          : AppColors.textSecondary,
+          
+          // 데이터 분기 처리 적용
+          if (_isLoadingPrice)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_realPriceData.isEmpty)
+            const Text(
+              '최저가 정보를 불러올 수 없습니다.',
+              style: TextStyle(color: AppColors.textMuted),
+            )
+          else
+            ..._realPriceData.map(
+              (p) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    if (p.isLowest)
+                      const Icon(
+                        Icons.check_circle,
+                        size: 16,
+                        color: AppColors.success,
+                      )
+                    else
+                      const SizedBox(width: 16),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        p.store, // 여기에 "제주삼다수 (총 12개 / 개당 1,033원)" 형태가 들어갑니다.
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: p.isLowest ? FontWeight.w600 : FontWeight.w400,
+                          color: p.isLowest ? AppColors.text : AppColors.textSecondary,
+                        ),
+                        overflow: TextOverflow.ellipsis, // 글자가 길면 줄임표 처리
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    _formatPrice(p.price),
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: p.isLowest
-                          ? FontWeight.w700
-                          : FontWeight.w400,
-                      color: p.isLowest ? AppColors.success : AppColors.text,
+                    const SizedBox(width: 10),
+                    Text(
+                      _formatPrice(p.price),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: p.isLowest ? FontWeight.w700 : FontWeight.w400,
+                        color: p.isLowest ? AppColors.success : AppColors.text,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
