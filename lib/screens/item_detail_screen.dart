@@ -40,6 +40,20 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _fetchRealTimePrice() async {
+    // 통신 전 캐시 확인
+    final cached = _priceCache[_item.id];
+    if (cached != null && !cached.isExpired) {
+      if (mounted) {
+        setState(() {
+          _realPriceData = cached.priceData;
+          _buyLink = cached.buyLink;
+          _isLoadingPrice = false;
+        });
+      }
+      debugPrint('⚡ 최적화: 캐시된 가격 데이터 사용 (API 호출 생략)');
+      return; // 캐시가 있으면 여기서 함수 끝내기
+    }
+
     final String naverId = dotenv.env['NAVER_CLIENT_ID'] ?? '';
     final String naverSecret = dotenv.env['NAVER_CLIENT_SECRET'] ?? '';
     final String openaiKey = dotenv.env['OPENAI_API_KEY'] ?? '';

@@ -52,6 +52,8 @@ jobs:
         run: flutter --version
       - name: Install dependencies
         run: flutter pub get
+      - name: Create fake .env file
+        run: touch .env
       - name: Analyze code
         # Keep warnings/errors as merge blockers while leaving info-level lint cleanup to review comments.
         run: flutter analyze --no-fatal-infos
