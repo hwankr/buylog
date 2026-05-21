@@ -21,9 +21,8 @@ class ItemDetailScreen extends StatefulWidget {
 }
 
 class _ItemDetailScreenState extends State<ItemDetailScreen> {
-  
   static final Map<String, PriceCacheData> _priceCache = {};
-  
+
   late ConsumableItem _item;
 
   // 실시간 가격 데이터 변수
@@ -53,8 +52,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
 
     // 네이버 쇼핑 검색 API 호출
     final String searchQuery = '${_item.brand} ${_item.name}'.trim();
-    final naverUrl = 'https://openapi.naver.com/v1/search/shop.json?query=${Uri.encodeComponent(searchQuery)}&display=1';
-    
+    final naverUrl =
+        'https://openapi.naver.com/v1/search/shop.json?query=${Uri.encodeComponent(searchQuery)}&display=1';
+
     try {
       final naverResponse = await http.get(
         Uri.parse(naverUrl),
@@ -90,12 +90,13 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
               'messages': [
                 {
                   'role': 'system',
-                  'content': '너는 쇼핑 데이터 분석가야. 상품명에서 총 수량(개수)을 파악하고 단가를 계산해 무조건 지정된 JSON 스키마로만 응답해.'
+                  'content':
+                      '너는 쇼핑 데이터 분석가야. 상품명에서 총 수량(개수)을 파악하고 단가를 계산해 무조건 지정된 JSON 스키마로만 응답해.',
                 },
                 {
                   'role': 'user',
-                  'content': '상품명: $rawTitle, 전체가격: $totalPrice원'
-                }
+                  'content': '상품명: $rawTitle, 전체가격: $totalPrice원',
+                },
               ],
               'response_format': {
                 'type': 'json_schema',
@@ -107,19 +108,22 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                     'properties': {
                       'total_count': {'type': 'integer'},
                       'unit_price': {'type': 'integer'},
-                      'pure_name': {'type': 'string'}
+                      'pure_name': {'type': 'string'},
                     },
                     'required': ['total_count', 'unit_price', 'pure_name'],
-                    'additionalProperties': false
-                  }
-                }
-              }
+                    'additionalProperties': false,
+                  },
+                },
+              },
             }),
           );
 
           if (openaiResponse.statusCode == 200) {
-            final openaiData = jsonDecode(utf8.decode(openaiResponse.bodyBytes));
-            final String aiJsonString = openaiData['choices'][0]['message']['content'];
+            final openaiData = jsonDecode(
+              utf8.decode(openaiResponse.bodyBytes),
+            );
+            final String aiJsonString =
+                openaiData['choices'][0]['message']['content'];
             final Map<String, dynamic> aiResult = jsonDecode(aiJsonString);
 
             // AI가 계산해 준 단가를 UI 모델에 매핑
@@ -127,9 +131,8 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             final int totalCount = aiResult['total_count'];
             final String pureName = aiResult['pure_name'];
 
-            
             final lowestPrice = PriceComparison(
-              store: '[$mallName] $pureName (총 $totalCount개 / 개당 $unitPrice원)', 
+              store: '[$mallName] $pureName (총 $totalCount개 / 개당 $unitPrice원)',
               price: totalPrice,
               isLowest: true,
             );
@@ -145,10 +148,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
           }
         }
       }
-      
+
       // 검색 결과가 없거나 통신 에러 시 예외 처리
       if (mounted) setState(() => _isLoadingPrice = false);
-      
     } catch (e) {
       debugPrint('통신 및 파싱 에러: $e');
       if (mounted) setState(() => _isLoadingPrice = false);
@@ -519,7 +521,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          
+
           // 데이터 분기 처리 적용
           if (_isLoadingPrice)
             const Center(
@@ -537,12 +539,15 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             ..._realPriceData.map(
               (p) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                // 👇 Row 전체를 InkWell로 감싸고 터치 이벤트(_launchBuyLink)를 연결했습니다.
+                // Row 전체를 InkWell로 감싸고 터치 이벤트(_launchBuyLink)를 연결
                 child: InkWell(
                   onTap: _launchBuyLink,
                   borderRadius: BorderRadius.circular(8), // 터치할 때 물결 효과를 부드럽게
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4), // 터치 영역 확보
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 6,
+                      horizontal: 4,
+                    ), // 터치 영역
                     child: Row(
                       children: [
                         if (p.isLowest)
@@ -559,8 +564,12 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                             p.store, // 여기에 "[쇼핑몰] 제품명 (총 N개 / 개당 N원)" 형태가 들어갑니다.
                             style: TextStyle(
                               fontSize: 14,
-                              fontWeight: p.isLowest ? FontWeight.w600 : FontWeight.w400,
-                              color: p.isLowest ? AppColors.text : AppColors.textSecondary,
+                              fontWeight: p.isLowest
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: p.isLowest
+                                  ? AppColors.text
+                                  : AppColors.textSecondary,
                             ),
                             overflow: TextOverflow.ellipsis, // 글자가 길면 줄임표 처리
                           ),
@@ -570,8 +579,12 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                           _formatPrice(p.price),
                           style: TextStyle(
                             fontSize: 15,
-                            fontWeight: p.isLowest ? FontWeight.w700 : FontWeight.w400,
-                            color: p.isLowest ? AppColors.success : AppColors.text,
+                            fontWeight: p.isLowest
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                            color: p.isLowest
+                                ? AppColors.success
+                                : AppColors.text,
                           ),
                         ),
                       ],
