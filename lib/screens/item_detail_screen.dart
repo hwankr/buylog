@@ -8,6 +8,7 @@ import 'add_item_screen.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:url_launcher/url_launcher.dart'; // 👈 맨 위에 추가
 
 class ItemDetailScreen extends StatefulWidget {
   final ConsumableItem item;
@@ -147,6 +148,19 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     } catch (e) {
       debugPrint('통신 및 파싱 에러: $e');
       if (mounted) setState(() => _isLoadingPrice = false);
+    }
+  }
+
+  Future<void> _launchBuyLink() async {
+    // null 방어
+    if (_buyLink == null || _buyLink!.isEmpty) return;
+    final Uri url = Uri.parse(_buyLink!);
+    try {
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        debugPrint('링크 이동 실패: $_buyLink');
+      }
+    } catch (e) {
+      debugPrint('링크 실행 중 에러 발생: $e');
     }
   }
 
@@ -519,38 +533,46 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             ..._realPriceData.map(
               (p) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  children: [
-                    if (p.isLowest)
-                      const Icon(
-                        Icons.check_circle,
-                        size: 16,
-                        color: AppColors.success,
-                      )
-                    else
-                      const SizedBox(width: 16),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        p.store, // 여기에 "제주삼다수 (총 12개 / 개당 1,033원)" 형태가 들어갑니다.
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: p.isLowest ? FontWeight.w600 : FontWeight.w400,
-                          color: p.isLowest ? AppColors.text : AppColors.textSecondary,
+                // 👇 Row 전체를 InkWell로 감싸고 터치 이벤트(_launchBuyLink)를 연결했습니다.
+                child: InkWell(
+                  onTap: _launchBuyLink,
+                  borderRadius: BorderRadius.circular(8), // 터치할 때 물결 효과를 부드럽게
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4), // 터치 영역 확보
+                    child: Row(
+                      children: [
+                        if (p.isLowest)
+                          const Icon(
+                            Icons.check_circle,
+                            size: 16,
+                            color: AppColors.success,
+                          )
+                        else
+                          const SizedBox(width: 16),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            p.store, // 여기에 "[쇼핑몰] 제품명 (총 N개 / 개당 N원)" 형태가 들어갑니다.
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: p.isLowest ? FontWeight.w600 : FontWeight.w400,
+                              color: p.isLowest ? AppColors.text : AppColors.textSecondary,
+                            ),
+                            overflow: TextOverflow.ellipsis, // 글자가 길면 줄임표 처리
+                          ),
                         ),
-                        overflow: TextOverflow.ellipsis, // 글자가 길면 줄임표 처리
-                      ),
+                        const SizedBox(width: 10),
+                        Text(
+                          _formatPrice(p.price),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: p.isLowest ? FontWeight.w700 : FontWeight.w400,
+                            color: p.isLowest ? AppColors.success : AppColors.text,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      _formatPrice(p.price),
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: p.isLowest ? FontWeight.w700 : FontWeight.w400,
-                        color: p.isLowest ? AppColors.success : AppColors.text,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
