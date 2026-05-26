@@ -17,6 +17,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2025, 11, 10),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2025, 11, 10),
@@ -36,6 +37,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2025, 12, 20),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2025, 12, 20),
@@ -105,6 +107,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2026, 3, 1),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 3, 1),
@@ -122,6 +125,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2026, 3, 20),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 3, 20),
@@ -139,6 +143,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2026, 3, 15),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 3, 15),
@@ -181,6 +186,7 @@ void main() {
         daysRemaining: 0,
         cycleDays: 30,
         progress: 0.5,
+        createdAt: DateTime(2026, 2, 18),
         purchaseHistory: [
           PurchaseRecord(date: DateTime(2026, 2, 18), price: 4200, store: 's'),
           PurchaseRecord(date: DateTime(2026, 3, 20), price: 4500, store: 's'),
@@ -208,6 +214,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2025, 12, 30),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 1, 12),
@@ -235,6 +242,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2026, 3, 20),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 3, 20),
@@ -269,6 +277,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2025, 2, 1),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 2, 1),
@@ -291,6 +300,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2026, 2, 5),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 2, 5),
@@ -330,6 +340,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2026, 3, 15),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 3, 15),
@@ -369,6 +380,7 @@ void main() {
           daysRemaining: 0,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2026, 3, 10),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 4, 10),
@@ -410,6 +422,7 @@ void main() {
         daysRemaining: 0,
         cycleDays: 30,
         progress: 0.5,
+        createdAt: DateTime(2026, 2, 10),
         purchaseHistory: [
           PurchaseRecord(date: DateTime(2026, 2, 10), price: 1000, store: 's'),
           PurchaseRecord(date: DateTime(2026, 3, 10), price: 2000, store: 's'),

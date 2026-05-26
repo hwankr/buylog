@@ -22,6 +22,7 @@ ConsumableItem _buildItem({
     cycleDays: 30,
     progress: 0.3,
     purchaseHistory: purchaseHistory,
+    createdAt: DateTime.now(),
   );
 }
 

@@ -12,6 +12,7 @@ ConsumableItem _seed(String id, {String name = 'X', int days = 10}) =>
       daysRemaining: days,
       cycleDays: 30,
       progress: 0.5,
+      createdAt: DateTime.now(),
     );
 
 void main() {

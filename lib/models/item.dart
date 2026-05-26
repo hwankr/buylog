@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/ai/prediction_service.dart';
 
 class ConsumableItem {
   final String id;
@@ -13,6 +14,7 @@ class ConsumableItem {
   final double? aiConfidence;
   final List<PurchaseRecord> purchaseHistory;
   final String? imageUrl;
+  final DateTime createdAt;
 
   const ConsumableItem({
     required this.id,
@@ -27,6 +29,7 @@ class ConsumableItem {
     this.aiConfidence,
     this.purchaseHistory = const [],
     this.imageUrl,
+    required this.createdAt,
   });
 
   /// Supabase product_items 행 + 관련 데이터로 ConsumableItem 생성
@@ -42,6 +45,9 @@ class ConsumableItem {
     Map<String, dynamic>? aiPrediction,
   }) {
     final cycleDays = (data['replacement_cycle_days'] as int?) ?? 30;
+    final createdAt = data['created_at'] != null
+        ? DateTime.parse(data['created_at'] as String)
+        : DateTime.now();
 
     // 구매일 내림차순 정렬
     final sorted = List<Map<String, dynamic>>.from(purchases)
@@ -51,13 +57,27 @@ class ConsumableItem {
         ).compareTo(DateTime.parse(a['purchase_date'])),
       );
 
+    final purchaseDateList = sorted
+        .map((p) => DateTime.parse(p['purchase_date']))
+        .toList();
+
+    // AI 예측값 또는 기본값 사용
+    final predictedCycleDays = aiPrediction?['predicted_cycle_days'] as int? ?? cycleDays;
+
+    // calcDday를 사용하여 실제 남은 일수 계산
+    final daysRemaining = calcDday(
+      purchaseDates: purchaseDateList,
+      predictedCycleDays: predictedCycleDays,
+      registeredAt: createdAt,
+    );
+
+    // progress 계산
     final lastDate = sorted.isNotEmpty
         ? DateTime.parse(sorted.first['purchase_date'])
         : null;
-
     final daysSince = lastDate != null
         ? DateTime.now().difference(lastDate).inDays
-        : cycleDays;
+        : 0;
 
     return ConsumableItem(
       id: data['id'] as String,
@@ -65,9 +85,9 @@ class ConsumableItem {
       brand: data['brand'] as String? ?? '',
       category: categoryName,
       icon: iconForCategory(categoryName),
-      daysRemaining: cycleDays - daysSince,
+      daysRemaining: daysRemaining,
       cycleDays: cycleDays,
-      progress: (daysSince / cycleDays).clamp(0.0, 1.0),
+      progress: (daysSince / predictedCycleDays).clamp(0.0, 1.0),
       imageUrl: data['image_url'] as String?,
       aiPredictedDays: aiPrediction?['predicted_cycle_days'] as int?,
       aiConfidence: (aiPrediction?['confidence'] as num?)?.toDouble(),
@@ -81,6 +101,7 @@ class ConsumableItem {
             ),
           )
           .toList(),
+      createdAt: createdAt,
     );
   }
 

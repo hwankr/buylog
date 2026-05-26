@@ -315,6 +315,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
               aiConfidence: duplicate.aiConfidence,
               imageUrl: imageUrl ?? duplicate.imageUrl,
               purchaseHistory: [...duplicate.purchaseHistory, ...newPurchases],
+              createdAt: duplicate.createdAt,
             );
             await ItemStore.instance.update(merged);
             if (mounted) {
@@ -345,6 +346,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         aiConfidence: _isEditing ? widget.editItem!.aiConfidence : null,
         imageUrl: imageUrl,
         purchaseHistory: purchases,
+        createdAt: _isEditing ? widget.editItem!.createdAt : DateTime.now(),
       );
 
       // Supabase 저장 + 인메모리 스토어 반영

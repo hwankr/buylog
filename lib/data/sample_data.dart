@@ -239,6 +239,7 @@ class SampleData {
       aiPredictedDays: aiPredictedDays,
       aiConfidence: aiConfidence,
       purchaseHistory: sortedHistory,
+      createdAt: sortedHistory.last.date,
     );
   }
 

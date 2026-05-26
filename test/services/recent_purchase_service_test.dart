@@ -16,6 +16,7 @@ void main() {
           daysRemaining: 4,
           cycleDays: 30,
           progress: 0.5,
+          createdAt: DateTime(2026, 4, 15),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 5, 1),
@@ -38,6 +39,7 @@ void main() {
           daysRemaining: 8,
           cycleDays: 40,
           progress: 0.3,
+          createdAt: DateTime(2026, 4, 30),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 5, 5),
@@ -80,6 +82,7 @@ void main() {
           daysRemaining: 10,
           cycleDays: 30,
           progress: 0.2,
+          createdAt: DateTime.now(),
         ),
         ConsumableItem(
           id: 'item-2',
@@ -90,6 +93,7 @@ void main() {
           daysRemaining: 5,
           cycleDays: 20,
           progress: 0.5,
+          createdAt: DateTime.now(),
         ),
       ];
 
@@ -115,6 +119,7 @@ void main() {
           daysRemaining: 10,
           cycleDays: 30,
           progress: 0.2,
+          createdAt: DateTime.now(),
           purchaseHistory: [
             PurchaseRecord(
               date: DateTime(2026, 5, 1),
