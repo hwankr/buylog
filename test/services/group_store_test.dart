@@ -117,6 +117,30 @@ void main() {
       expect(gateway.loadDefaultGroupCalls, 1);
     });
 
+    test('sets Korean error state and rethrows when preload fails', () async {
+      gateway.loadDefaultGroupError = StateError('load failed');
+
+      await expectLater(
+        GroupStore.instance.initialize(),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'load failed',
+          ),
+        ),
+      );
+
+      expect(GroupStore.instance.value.group, isNull);
+      expect(GroupStore.instance.value.isLoading, isFalse);
+      expect(GroupStore.instance.value.isSaving, isFalse);
+      expect(
+        GroupStore.instance.value.errorMessage,
+        '그룹 정보를 불러오지 못했습니다.',
+      );
+      expect(gateway.loadDefaultGroupCalls, 1);
+    });
+
     test('creates a group and exposes it through state', () async {
       gateway.loadDefaultGroupResult = _groupRow(name: 'My Group');
 
@@ -199,6 +223,7 @@ Map<String, dynamic> _groupRow({
 
 class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
+  Object? loadDefaultGroupError;
   Map<String, dynamic>? loadDefaultGroupResult;
   Map<String, dynamic>? insertedGroupValues;
   Object? updateDefaultGroupError;
@@ -206,6 +231,9 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   @override
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
     loadDefaultGroupCalls += 1;
+    if (loadDefaultGroupError != null) {
+      throw loadDefaultGroupError!;
+    }
     return loadDefaultGroupResult;
   }
 

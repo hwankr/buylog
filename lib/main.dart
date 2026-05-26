@@ -25,17 +25,23 @@ Future<void> main() async {
     ),
   );
 
-  // Supabase 초기화 (익명 로그인 포함)
-  await SupabaseService.initialize();
-
-  // 제품 목록 초기 로드
-  await ItemStore.instance.initialize();
-  await GroupStore.instance.initialize();
-
-  // 환경변수 로드
-  await dotenv.load(fileName: ".env");
-
+  await bootstrapApp();
   runApp(const BuylogApp());
+}
+
+Future<void> bootstrapApp() async {
+  await SupabaseService.initialize();
+  await ItemStore.instance.initialize();
+  await preloadGroupForStartup();
+  await dotenv.load(fileName: '.env');
+}
+
+Future<void> preloadGroupForStartup() async {
+  try {
+    await GroupStore.instance.initialize();
+  } catch (error) {
+    debugPrint('[bootstrap] Group preload failed: $error');
+  }
 }
 
 class BuylogApp extends StatelessWidget {

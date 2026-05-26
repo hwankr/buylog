@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:buylog/services/group_store.dart';
+import 'package:buylog/services/supabase_service.dart';
 import 'package:buylog/main.dart';
 
 void main() {
@@ -20,16 +22,37 @@ void main() {
           },
         );
 
-    try {
-      await Supabase.initialize(
-        url: 'https://mock.supabase.co',
-        anonKey: 'mock-anon-key',
-        authOptions: const FlutterAuthClientOptions(
-          localStorage: EmptyLocalStorage(),
-        ),
-      );
-    } catch (_) {}
+    await Supabase.initialize(
+      url: 'https://mock.supabase.co',
+      anonKey: 'mock-anon-key',
+      authOptions: const FlutterAuthClientOptions(
+        localStorage: EmptyLocalStorage(),
+      ),
+    );
   });
+
+  tearDown(() {
+    GroupStore.instance.resetForTesting();
+    SupabaseService.debugGroupDatabaseGateway = null;
+  });
+
+  testWidgets(
+    'preloadGroupForStartup keeps app renderable when group preload fails',
+    (WidgetTester tester) async {
+      SupabaseService.debugGroupDatabaseGateway =
+          _ThrowingGroupDatabaseGateway();
+
+      await preloadGroupForStartup();
+
+      expect(
+        GroupStore.instance.value.errorMessage,
+        '그룹 정보를 불러오지 못했습니다.',
+      );
+      await tester.pumpWidget(const BuylogApp());
+      await tester.pump();
+      expect(find.byType(MainNavigation), findsOneWidget);
+    },
+  );
 
   testWidgets('App should render', (WidgetTester tester) async {
     // 앱을 렌더링합니다.
@@ -38,4 +61,29 @@ void main() {
     // 하단 탭의 '모든 제품' 라벨로 새 디자인 셸이 렌더링되었는지 확인합니다.
     expect(find.text('모든 제품'), findsOneWidget);
   });
+}
+
+class _ThrowingGroupDatabaseGateway implements GroupDatabaseGateway {
+  @override
+  Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
+    throw StateError('group preload failed');
+  }
+
+  @override
+  Future<Map<String, dynamic>> insertGroup(Map<String, dynamic> values) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> insertGroupMember(Map<String, dynamic> values) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> updateDefaultGroup({
+    required String userId,
+    required String groupId,
+  }) {
+    throw UnimplementedError();
+  }
 }
