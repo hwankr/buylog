@@ -1,385 +1,359 @@
 import 'package:flutter/material.dart';
-import '../data/sample_data.dart';
+
+import '../models/group.dart';
+import '../services/group_store.dart';
 import '../theme/app_theme.dart';
-import '../utils/dday_format.dart';
 
-class GroupScreen extends StatefulWidget {
+class GroupScreen extends StatelessWidget {
   const GroupScreen({super.key});
-
-  @override
-  State<GroupScreen> createState() => _GroupScreenState();
-}
-
-class _GroupScreenState extends State<GroupScreen> {
-  bool _showGroupItems = false;
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          // Header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('그룹', style: Theme.of(context).textTheme.headlineMedium),
-                ],
-              ),
+      child: ValueListenableBuilder<GroupState>(
+        valueListenable: GroupStore.instance,
+        builder: (context, state, _) {
+          if (state.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '그룹',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                const SizedBox(height: 20),
+                if (state.group == null)
+                  _EmptyGroupState(errorMessage: state.errorMessage)
+                else
+                  _GroupCard(group: state.group!),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EmptyGroupState extends StatelessWidget {
+  const _EmptyGroupState({this.errorMessage});
+
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight2,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.group_outlined,
+              color: AppColors.primary,
+              size: 28,
             ),
           ),
-
-          // Group card
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border, width: 0.5),
-                ),
-                child: Column(
-                  children: [
-                    // Group name
-                    const Row(
-                      children: [
-                        Icon(
-                          Icons.home_outlined,
-                          size: 22,
-                          color: AppColors.primary,
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          '우리 가족',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.text,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-
-                    // Member avatars
-                    Row(
-                      children: [
-                        ...SampleData.groupMembers.map(
-                          (m) => Padding(
-                            padding: const EdgeInsets.only(right: 12),
-                            child: Column(
-                              children: [
-                                CircleAvatar(
-                                  radius: 22,
-                                  backgroundColor: Color(
-                                    int.parse(m.avatarColor),
-                                  ),
-                                  child: Text(
-                                    m.name[0],
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  m.name,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 18),
-                          child: GestureDetector(
-                            onTap: () {},
-                            child: CircleAvatar(
-                              radius: 22,
-                              backgroundColor: AppColors.surfaceAlt,
-                              child: const Icon(
-                                Icons.add,
-                                color: AppColors.textMuted,
-                                size: 22,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-
-                    // Invite code
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.link,
-                            size: 18,
-                            color: AppColors.textMuted,
-                          ),
-                          const SizedBox(width: 10),
-                          const Text(
-                            '초대 코드: ',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const Text(
-                            'BUY-FAM-2026',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.text,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                          const Spacer(),
-                          GestureDetector(
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('초대 코드가 복사되었습니다'),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
-                            child: const Icon(
-                              Icons.copy,
-                              size: 18,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+          const SizedBox(height: 16),
+          Text(
+            '아직 연결된 그룹이 없습니다.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '가족이나 룸메이트와 함께 유통기한을 관리하려면 그룹을 만들어 보세요.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          if (errorMessage?.isNotEmpty == true) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.dangerLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                errorMessage!,
+                style: const TextStyle(
+                  color: AppColors.danger,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-          ),
-
-          // Toggle: My Items / Group
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _showGroupItems = false),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: !_showGroupItems
-                                ? AppColors.surface
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: !_showGroupItems
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.05,
-                                      ),
-                                      blurRadius: 4,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Text(
-                            '내 아이템',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: !_showGroupItems
-                                  ? AppColors.text
-                                  : AppColors.textMuted,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _showGroupItems = true),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: _showGroupItems
-                                ? AppColors.surface
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: _showGroupItems
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.05,
-                                      ),
-                                      blurRadius: 4,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Text(
-                            '그룹 아이템',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: _showGroupItems
-                                  ? AppColors.text
-                                  : AppColors.textMuted,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          ],
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => const _CreateGroupDialog(),
             ),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(48),
+            ),
+            child: const Text('그룹 만들기'),
           ),
-
-          // Items by category
-          ..._buildCategoryGroups(),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),
     );
   }
+}
 
-  List<Widget> _buildCategoryGroups() {
-    final items = SampleData.items;
-    final categories = <String>{};
-    for (final item in items) {
-      categories.add(item.category);
-    }
+class _GroupCard extends StatelessWidget {
+  const _GroupCard({required this.group});
 
-    final widgets = <Widget>[];
-    for (final category in categories) {
-      final categoryItems = items.where((i) => i.category == category).toList();
+  final BuylogGroup group;
 
-      widgets.add(
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-            child: Text(
-              category,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight2,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.home_outlined,
+                  color: AppColors.primary,
+                ),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  group.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '초대 코드: ${group.inviteCode}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            '멤버',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          if (group.members.isEmpty)
+            const Text(
+              '아직 등록된 멤버가 없습니다.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+            )
+          else
+            Column(
+              children: [
+                for (final member in group.members)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _MemberRow(member: member),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MemberRow extends StatelessWidget {
+  const _MemberRow({required this.member});
+
+  final BuylogGroupMember member;
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = member.displayName.isNotEmpty
+        ? member.displayName.characters.first
+        : '?';
+
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: AppColors.primaryLight2,
+          foregroundColor: AppColors.primaryDark,
+          child: Text(
+            initial,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            member.displayName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: AppColors.text,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
-      );
-
-      widgets.add(
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          sliver: SliverList.separated(
-            itemCount: categoryItems.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final item = categoryItems[index];
-              final updater = _showGroupItems
-                  ? SampleData.groupMembers[index %
-                        SampleData.groupMembers.length]
-                  : null;
-
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border, width: 0.5),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight2,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        item.icon,
-                        color: AppColors.primary,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.name,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.text,
-                            ),
-                          ),
-                          if (updater != null)
-                            Text(
-                              '${updater.name}님이 업데이트',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textMuted,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      formatDdayLabel(item.daysRemaining),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: item.daysRemaining <= 7
-                            ? AppColors.danger
-                            : AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+        const SizedBox(width: 12),
+        Text(
+          member.role == GroupRole.owner ? '관리자' : '멤버',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
-      );
+      ],
+    );
+  }
+}
+
+class _CreateGroupDialog extends StatefulWidget {
+  const _CreateGroupDialog();
+
+  @override
+  State<_CreateGroupDialog> createState() => _CreateGroupDialogState();
+}
+
+class _CreateGroupDialogState extends State<_CreateGroupDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (GroupStore.instance.value.isSaving) {
+      return;
     }
-    return widgets;
+
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    try {
+      await GroupStore.instance.createGroup(_controller.text);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<GroupState>(
+      valueListenable: GroupStore.instance,
+      builder: (context, state, _) {
+        return AlertDialog(
+          title: const Text('그룹 만들기'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Form(
+                key: _formKey,
+                child: TextFormField(
+                  controller: _controller,
+                  autofocus: !state.isSaving,
+                  readOnly: state.isSaving,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(labelText: '그룹 이름'),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return '그룹 이름을 입력해 주세요.';
+                    }
+                    return null;
+                  },
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+              ),
+              if (state.errorMessage?.isNotEmpty == true) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.dangerLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    state.errorMessage!,
+                    style: const TextStyle(
+                      color: AppColors.danger,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: state.isSaving ? null : () => Navigator.of(context).pop(),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: state.isSaving ? null : _submit,
+              child: state.isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('만들기'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
