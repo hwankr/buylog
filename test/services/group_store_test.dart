@@ -239,7 +239,10 @@ void main() {
       expect(gateway.loadGroupMembersCalls, 1);
       expect(gateway.loadGroupMembersGroupId, 'group-1');
       expect(GroupStore.instance.value.group?.members, hasLength(1));
-      expect(GroupStore.instance.value.group?.members.single.displayName, '새 멤버');
+      expect(
+        GroupStore.instance.value.group?.members.single.displayName,
+        '새 멤버',
+      );
       expect(
         GroupStore.instance.value.group?.members.single.role,
         GroupRole.member,
@@ -248,30 +251,36 @@ void main() {
       expect(GroupStore.instance.value.errorMessage, isNull);
     });
 
-    test('sets an error and keeps previous members when refresh fails', () async {
-      gateway.loadDefaultGroupResult = _groupRow(name: 'Existing Group');
-      await GroupStore.instance.initialize();
-      gateway.loadGroupMembersError = StateError('refresh failed');
+    test(
+      'sets an error and keeps previous members when refresh fails',
+      () async {
+        gateway.loadDefaultGroupResult = _groupRow(name: 'Existing Group');
+        await GroupStore.instance.initialize();
+        gateway.loadGroupMembersError = StateError('refresh failed');
 
-      await expectLater(
-        GroupStore.instance.refreshMembers(),
-        throwsA(
-          isA<StateError>().having(
-            (error) => error.message,
-            'message',
-            'refresh failed',
+        await expectLater(
+          GroupStore.instance.refreshMembers(),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              'refresh failed',
+            ),
           ),
-        ),
-      );
+        );
 
-      expect(gateway.loadGroupMembersCalls, 1);
-      expect(GroupStore.instance.value.group?.members.single.displayName, 'Owner');
-      expect(GroupStore.instance.value.isRefreshingMembers, isFalse);
-      expect(
-        GroupStore.instance.value.errorMessage,
-        '멤버 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
-      );
-    });
+        expect(gateway.loadGroupMembersCalls, 1);
+        expect(
+          GroupStore.instance.value.group?.members.single.displayName,
+          'Owner',
+        );
+        expect(GroupStore.instance.value.isRefreshingMembers, isFalse);
+        expect(
+          GroupStore.instance.value.errorMessage,
+          '멤버 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        );
+      },
+    );
   });
 }
 

@@ -355,7 +355,8 @@ class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
           )
       ''';
 
-  static const _groupProjection = '''
+  static const _groupProjection =
+      '''
         id,
         name,
         invite_code,

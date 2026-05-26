@@ -73,4 +73,11 @@ class _ThrowingGroupDatabaseGateway implements GroupDatabaseGateway {
   }) {
     throw UnsupportedError('createGroupWithOwner is not used in this test');
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> loadGroupMembers({
+    required String groupId,
+  }) {
+    throw UnsupportedError('loadGroupMembers is not used in this test');
+  }
 }

@@ -109,49 +109,40 @@ void main() {
       SupabaseService.debugGroupDatabaseGateway = null;
     });
 
-    test(
-      'creates a trimmed group through one atomic gateway call',
-      () async {
-        final gateway = _RecordingGroupDatabaseGateway()
-          ..createGroupWithOwnerResult = <String, dynamic>{
-            'id': 'group-1',
-            'name': 'My Group',
-            'invite_code': 'BUY-ABC123',
-            'created_by': SupabaseService.currentUserId,
-            'created_at': '2026-05-26T00:00:00.000Z',
-            'group_members': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'id': 'member-1',
-                'user_id': SupabaseService.currentUserId,
-                'role': 'owner',
-                'joined_at': '2026-05-26T00:00:00.000Z',
-                'users': <String, dynamic>{
-                  'display_name': 'Owner',
-                  'email': 'owner@example.com',
-                },
+    test('creates a trimmed group through one atomic gateway call', () async {
+      final gateway = _RecordingGroupDatabaseGateway()
+        ..createGroupWithOwnerResult = <String, dynamic>{
+          'id': 'group-1',
+          'name': 'My Group',
+          'invite_code': 'BUY-ABC123',
+          'created_by': SupabaseService.currentUserId,
+          'created_at': '2026-05-26T00:00:00.000Z',
+          'group_members': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'member-1',
+              'user_id': SupabaseService.currentUserId,
+              'role': 'owner',
+              'joined_at': '2026-05-26T00:00:00.000Z',
+              'users': <String, dynamic>{
+                'display_name': 'Owner',
+                'email': 'owner@example.com',
               },
-            ],
-          };
-        SupabaseService.debugGroupDatabaseGateway = gateway;
+            },
+          ],
+        };
+      SupabaseService.debugGroupDatabaseGateway = gateway;
 
-        final group = await SupabaseService.createGroup(name: '  My Group  ');
+      final group = await SupabaseService.createGroup(name: '  My Group  ');
 
-        expect(gateway.createGroupWithOwnerCalls, 1);
-        expect(gateway.createGroupWithOwnerName, 'My Group');
-        expect(
-          gateway.createGroupWithOwnerInviteCode,
-          startsWith('BUY-'),
-        );
-        expect(
-          gateway.createGroupWithOwnerInviteCode?.length,
-          10,
-        );
-        expect(gateway.loadDefaultGroupCalls, 0);
-        expect(group.id, 'group-1');
-        expect(group.name, 'My Group');
-        expect(group.members.single.role.databaseValue, 'owner');
-      },
-    );
+      expect(gateway.createGroupWithOwnerCalls, 1);
+      expect(gateway.createGroupWithOwnerName, 'My Group');
+      expect(gateway.createGroupWithOwnerInviteCode, startsWith('BUY-'));
+      expect(gateway.createGroupWithOwnerInviteCode?.length, 10);
+      expect(gateway.loadDefaultGroupCalls, 0);
+      expect(group.id, 'group-1');
+      expect(group.name, 'My Group');
+      expect(group.members.single.role.databaseValue, 'owner');
+    });
 
     test('rejects blank names without calling gateway', () async {
       final gateway = _RecordingGroupDatabaseGateway();

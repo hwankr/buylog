@@ -122,10 +122,7 @@ class _EmptyGroupState extends StatelessWidget {
 }
 
 class _GroupCard extends StatelessWidget {
-  const _GroupCard({
-    required this.group,
-    required this.isRefreshingMembers,
-  });
+  const _GroupCard({required this.group, required this.isRefreshingMembers});
 
   final BuylogGroup group;
   final bool isRefreshingMembers;
