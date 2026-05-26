@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/group.dart';
 import '../models/item.dart';
 
 /// Supabase 연동 서비스
@@ -12,6 +13,7 @@ class SupabaseService {
   static const _supabaseUrl = 'https://fervijwxdgkwjtcpzskx.supabase.co';
   static const _anonKey = 'sb_publishable_FO7WmA_Pu4RsGgsfRJzssQ_f0orCu7w';
   static const _storageBucket = 'product-images';
+  static const _groupInviteCodeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
   static SupabaseClient get _db => Supabase.instance.client;
 
@@ -20,6 +22,12 @@ class SupabaseService {
 
   @visibleForTesting
   static ProductImageStorageGateway? debugImageStorageGateway;
+
+  @visibleForTesting
+  static GroupDatabaseGateway? debugGroupDatabaseGateway;
+
+  static GroupDatabaseGateway get _groupDatabaseGateway =>
+      debugGroupDatabaseGateway ?? SupabaseGroupDatabaseGateway(_db);
 
   // ────────────────────────────────────────────────────────────────────────────
   // 초기화 & 인증
@@ -36,6 +44,45 @@ class SupabaseService {
 
   /// 현재 사용자 ID
   static String get currentUserId => _devUserId;
+
+  static Future<BuylogGroup?> loadDefaultGroup() async {
+    final row = await _groupDatabaseGateway.loadDefaultGroup(currentUserId);
+    if (row == null) {
+      return null;
+    }
+
+    return BuylogGroup.fromSupabase(row);
+  }
+
+  static Future<BuylogGroup> createGroup({required String name}) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Group name is required.');
+    }
+
+    final userId = currentUserId;
+    final insertedGroup = await _groupDatabaseGateway.insertGroup({
+      'name': trimmedName,
+      'invite_code': _generateInviteCode(),
+      'created_by': userId,
+    });
+
+    final groupId = insertedGroup['id'] as String;
+
+    await _groupDatabaseGateway.insertGroupMember({
+      'group_id': groupId,
+      'user_id': userId,
+      'role': GroupRole.owner.databaseValue,
+    });
+
+    await _groupDatabaseGateway.updateDefaultGroup(
+      userId: userId,
+      groupId: groupId,
+    );
+
+    final reloadedGroup = await loadDefaultGroup();
+    return reloadedGroup ?? BuylogGroup.fromSupabase(insertedGroup);
+  }
 
   // ────────────────────────────────────────────────────────────────────────────
   // 이미지 업로드
@@ -257,6 +304,19 @@ class SupabaseService {
         '${hex.substring(20)}';
   }
 
+  static String _generateInviteCode() {
+    final random = Random.secure();
+    final buffer = StringBuffer('BUY-');
+    for (var i = 0; i < 6; i++) {
+      buffer.write(
+        _groupInviteCodeAlphabet[random.nextInt(
+          _groupInviteCodeAlphabet.length,
+        )],
+      );
+    }
+    return buffer.toString();
+  }
+
   static String _iconNameForCategory(String name) {
     return switch (name) {
       '욕실/위생' => 'bathroom',
@@ -266,6 +326,92 @@ class SupabaseService {
       '가전/필터' => 'air',
       _ => 'category',
     };
+  }
+}
+
+abstract class GroupDatabaseGateway {
+  Future<Map<String, dynamic>?> loadDefaultGroup(String userId);
+
+  Future<Map<String, dynamic>> insertGroup(Map<String, dynamic> values);
+
+  Future<void> insertGroupMember(Map<String, dynamic> values);
+
+  Future<void> updateDefaultGroup({
+    required String userId,
+    required String groupId,
+  });
+}
+
+class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
+  SupabaseGroupDatabaseGateway(this._client);
+
+  static const _groupProjection = '''
+        id,
+        name,
+        invite_code,
+        created_by,
+        created_at,
+        group_members (
+          id,
+          user_id,
+          role,
+          joined_at,
+          users (
+            display_name,
+            email
+          )
+        )
+      ''';
+
+  final SupabaseClient _client;
+
+  @override
+  Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
+    final userRow = await _client
+        .from('users')
+        .select('default_group_id')
+        .eq('id', userId)
+        .maybeSingle();
+
+    final groupId = userRow?['default_group_id'] as String?;
+    if (groupId == null || groupId.isEmpty) {
+      return null;
+    }
+
+    final groupRow = await _client
+        .from('groups')
+        .select(_groupProjection)
+        .eq('id', groupId)
+        .single();
+    return Map<String, dynamic>.from(groupRow);
+  }
+
+  @override
+  Future<Map<String, dynamic>> insertGroup(Map<String, dynamic> values) async {
+    final row = await _client
+        .from('groups')
+        .insert(values)
+        .select(_groupProjection)
+        .single();
+    return Map<String, dynamic>.from(row);
+  }
+
+  @override
+  Future<void> insertGroupMember(Map<String, dynamic> values) async {
+    await _client.from('group_members').insert(values);
+  }
+
+  @override
+  Future<void> updateDefaultGroup({
+    required String userId,
+    required String groupId,
+  }) async {
+    await _client
+        .from('users')
+        .update({'default_group_id': groupId})
+        .eq('id', userId)
+        .select('id, default_group_id')
+        .single();
   }
 }
 
