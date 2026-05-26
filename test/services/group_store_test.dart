@@ -217,6 +217,61 @@ void main() {
         );
       },
     );
+
+    test('refreshes members for the current group', () async {
+      gateway.loadDefaultGroupResult = _groupRow(name: 'Existing Group');
+      await GroupStore.instance.initialize();
+      gateway.loadGroupMembersResult = <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'member-2',
+          'user_id': 'user-2',
+          'role': 'member',
+          'joined_at': '2026-05-26T10:22:30.000Z',
+          'users': <String, dynamic>{
+            'display_name': '새 멤버',
+            'email': 'member@example.com',
+          },
+        },
+      ];
+
+      await GroupStore.instance.refreshMembers();
+
+      expect(gateway.loadGroupMembersCalls, 1);
+      expect(gateway.loadGroupMembersGroupId, 'group-1');
+      expect(GroupStore.instance.value.group?.members, hasLength(1));
+      expect(GroupStore.instance.value.group?.members.single.displayName, '새 멤버');
+      expect(
+        GroupStore.instance.value.group?.members.single.role,
+        GroupRole.member,
+      );
+      expect(GroupStore.instance.value.isRefreshingMembers, isFalse);
+      expect(GroupStore.instance.value.errorMessage, isNull);
+    });
+
+    test('sets an error and keeps previous members when refresh fails', () async {
+      gateway.loadDefaultGroupResult = _groupRow(name: 'Existing Group');
+      await GroupStore.instance.initialize();
+      gateway.loadGroupMembersError = StateError('refresh failed');
+
+      await expectLater(
+        GroupStore.instance.refreshMembers(),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'refresh failed',
+          ),
+        ),
+      );
+
+      expect(gateway.loadGroupMembersCalls, 1);
+      expect(GroupStore.instance.value.group?.members.single.displayName, 'Owner');
+      expect(GroupStore.instance.value.isRefreshingMembers, isFalse);
+      expect(
+        GroupStore.instance.value.errorMessage,
+        '멤버 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+    });
   });
 }
 
@@ -254,10 +309,14 @@ Map<String, dynamic> _groupRow({String id = 'group-1', required String name}) {
 
 class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
+  int loadGroupMembersCalls = 0;
   Object? loadDefaultGroupError;
+  Object? loadGroupMembersError;
+  String? loadGroupMembersGroupId;
   Map<String, dynamic>? loadDefaultGroupResult;
   Map<String, dynamic>? createdGroupValues;
   Object? createGroupWithOwnerError;
+  List<Map<String, dynamic>> loadGroupMembersResult = const [];
 
   @override
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
@@ -295,6 +354,11 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   Future<List<Map<String, dynamic>>> loadGroupMembers({
     required String groupId,
   }) async {
-    return const <Map<String, dynamic>>[];
+    loadGroupMembersCalls += 1;
+    loadGroupMembersGroupId = groupId;
+    if (loadGroupMembersError != null) {
+      throw loadGroupMembersError!;
+    }
+    return loadGroupMembersResult;
   }
 }
