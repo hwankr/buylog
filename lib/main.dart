@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'models/item_scope.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/group_screen.dart';
@@ -95,6 +96,20 @@ class MainNavigationState extends State<MainNavigation> {
     setState(() => _currentIndex = index);
   }
 
+  ItemScope _currentAddScope() {
+    if (_currentIndex != 1) {
+      return const ItemScope.personal();
+    }
+
+    final state = GroupStore.instance.value;
+    final scope = state.selectedScope;
+    if (scope.isGroup) {
+      return scope;
+    }
+
+    return const ItemScope.personal();
+  }
+
   Widget _screenAt(int index) => switch (index) {
     0 => const HomeScreen(),
     1 => const GroupScreen(),
@@ -112,6 +127,7 @@ class MainNavigationState extends State<MainNavigation> {
       builder: (_) => const _AddActionSheet(),
     );
     if (!mounted || choice == null) return;
+    final targetScope = _currentAddScope();
     switch (choice) {
       case _AddChoice.scan:
         // ScanScreen 코드는 변경하지 않음. 자체 헤더가 있으니 AppBar 없이
@@ -122,7 +138,7 @@ class MainNavigationState extends State<MainNavigation> {
               backgroundColor: AppColors.background,
               body: Stack(
                 children: [
-                  const ScanScreen(),
+                  ScanScreen(targetScope: targetScope),
                   Positioned(
                     top: MediaQuery.of(ctx).padding.top + 8,
                     right: 12,
@@ -143,15 +159,18 @@ class MainNavigationState extends State<MainNavigation> {
           ),
         );
       case _AddChoice.manual:
-        Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const AddItemScreen()));
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AddItemScreen(targetScope: targetScope),
+          ),
+        );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final showFab = _currentIndex == 0 || _currentIndex == 2;
+    final showFab =
+        _currentIndex == 0 || _currentIndex == 1 || _currentIndex == 2;
 
     return Scaffold(
       body: IndexedStack(

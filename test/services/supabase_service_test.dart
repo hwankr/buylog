@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:buylog/models/group.dart';
+import 'package:buylog/models/item.dart';
 import 'package:buylog/models/item_scope.dart';
 import 'package:buylog/services/supabase_service.dart';
 
@@ -82,6 +83,12 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   String? lastUserId;
   String? lastGroupId;
   List<Map<String, dynamic>> loadItemsResult = const [];
+  String? ensureCategoryName;
+  String? ensureCategoryUserId;
+  String? ensureCategoryGroupId;
+  Map<String, dynamic>? upsertedItemPayload;
+  final List<Map<String, dynamic>> insertedPurchasePayloads = [];
+  String ensuredCategoryId = 'category-1';
 
   @override
   Future<List<Map<String, dynamic>>> loadItems({
@@ -91,6 +98,28 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
     lastUserId = userId;
     lastGroupId = groupId;
     return loadItemsResult;
+  }
+
+  @override
+  Future<String> ensureCategory({
+    required String name,
+    required String? userId,
+    required String? groupId,
+  }) async {
+    ensureCategoryName = name;
+    ensureCategoryUserId = userId;
+    ensureCategoryGroupId = groupId;
+    return ensuredCategoryId;
+  }
+
+  @override
+  Future<void> upsertItem(Map<String, dynamic> payload) async {
+    upsertedItemPayload = Map<String, dynamic>.from(payload);
+  }
+
+  @override
+  Future<void> insertPurchase(Map<String, dynamic> payload) async {
+    insertedPurchasePayloads.add(Map<String, dynamic>.from(payload));
   }
 }
 
@@ -337,6 +366,79 @@ void main() {
       expect(items.single.groupId, 'group-1');
       expect(gateway.lastUserId, isNull);
       expect(gateway.lastGroupId, 'group-1');
+    });
+  });
+
+  group('SupabaseService.saveItem scoped ownership', () {
+    tearDown(() {
+      SupabaseService.debugItemDatabaseGateway = null;
+    });
+
+    test('saves group items with group_id and null user_id', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      await SupabaseService.saveItem(
+        ConsumableItem(
+          id: 'item-1',
+          name: '세제',
+          brand: '브랜드',
+          category: '주방/세제',
+          icon: ConsumableItem.iconForCategory('주방/세제'),
+          daysRemaining: 30,
+          cycleDays: 30,
+          progress: 0,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 5, 27),
+              price: 8900,
+              store: '마트',
+            ),
+          ],
+        ),
+        scope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+      );
+
+      expect(gateway.ensureCategoryName, '주방/세제');
+      expect(gateway.ensureCategoryUserId, isNull);
+      expect(gateway.ensureCategoryGroupId, 'group-1');
+      expect(gateway.upsertedItemPayload?['id'], 'item-1');
+      expect(gateway.upsertedItemPayload?['user_id'], isNull);
+      expect(gateway.upsertedItemPayload?['group_id'], 'group-1');
+      expect(
+        gateway.upsertedItemPayload?['registered_by'],
+        SupabaseService.currentUserId,
+      );
+      expect(
+        gateway.insertedPurchasePayloads.single['product_item_id'],
+        'item-1',
+      );
+    });
+
+    test('saves personal items with user_id and null group_id', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      await SupabaseService.saveItem(
+        ConsumableItem(
+          id: 'item-1',
+          name: '샴푸',
+          brand: '브랜드',
+          category: '헤어/바디',
+          icon: ConsumableItem.iconForCategory('헤어/바디'),
+          daysRemaining: 30,
+          cycleDays: 30,
+          progress: 0,
+        ),
+      );
+
+      expect(gateway.ensureCategoryUserId, SupabaseService.currentUserId);
+      expect(gateway.ensureCategoryGroupId, isNull);
+      expect(
+        gateway.upsertedItemPayload?['user_id'],
+        SupabaseService.currentUserId,
+      );
+      expect(gateway.upsertedItemPayload?['group_id'], isNull);
     });
   });
 

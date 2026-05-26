@@ -4,6 +4,7 @@ import '../models/group.dart';
 import '../models/item_scope.dart';
 import '../services/group_items_store.dart';
 import '../services/group_store.dart';
+import '../services/item_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/group/group_scoped_item_list.dart';
 import '../widgets/group/item_scope_tabs.dart';
@@ -23,10 +24,12 @@ class _GroupScreenState extends State<GroupScreen> {
     super.initState();
     _itemsStore = GroupItemsStore();
     _itemsStore.load(GroupStore.instance.value.selectedScope);
+    ItemStore.instance.lastSaveEvent.addListener(_reloadAfterScopedSave);
   }
 
   @override
   void dispose() {
+    ItemStore.instance.lastSaveEvent.removeListener(_reloadAfterScopedSave);
     _itemsStore.dispose();
     super.dispose();
   }
@@ -34,6 +37,15 @@ class _GroupScreenState extends State<GroupScreen> {
   void _selectScope(ItemScope scope) {
     GroupStore.instance.selectScope(scope);
     _itemsStore.load(scope);
+  }
+
+  void _reloadAfterScopedSave() {
+    final event = ItemStore.instance.lastSaveEvent.value;
+    final selectedScope = GroupStore.instance.value.selectedScope;
+    if (event == null || event.scope.storageKey != selectedScope.storageKey) {
+      return;
+    }
+    _itemsStore.load(event.scope);
   }
 
   @override

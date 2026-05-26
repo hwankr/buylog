@@ -18,9 +18,6 @@ class SupabaseService {
 
   static SupabaseClient get _db => Supabase.instance.client;
 
-  /// 카테고리 이름 → UUID 로컬 캐시 (앱 세션 동안 유지)
-  static final Map<String, String> _categoryCache = {};
-
   @visibleForTesting
   static ProductImageStorageGateway? debugImageStorageGateway;
 
@@ -177,14 +174,25 @@ class SupabaseService {
   ///
   /// - product_items 테이블에 upsert (id 기준)
   /// - id가 없는 신규 PurchaseRecord만 purchases 테이블에 insert
-  static Future<void> saveItem(ConsumableItem item) async {
+  static Future<void> saveItem(
+    ConsumableItem item, {
+    ItemScope scope = const ItemScope.personal(),
+  }) async {
     final uid = currentUserId;
-    try {
-      final categoryId = await _ensureCategory(item.category);
+    final userId = scope.isPersonal ? uid : null;
+    final groupId = scope.isGroup ? scope.id : null;
 
-      await _db.from('product_items').upsert({
+    try {
+      final categoryId = await _itemDatabaseGateway.ensureCategory(
+        name: item.category,
+        userId: userId,
+        groupId: groupId,
+      );
+
+      await _itemDatabaseGateway.upsertItem({
         'id': item.id,
-        'user_id': uid,
+        'user_id': userId,
+        'group_id': groupId,
         'registered_by': uid,
         'category_id': categoryId,
         'name': item.name,
@@ -196,7 +204,7 @@ class SupabaseService {
       // id가 null인 신규 구매 이력만 삽입
       for (final record in item.purchaseHistory) {
         if (record.id == null) {
-          await _db.from('purchases').insert({
+          await _itemDatabaseGateway.insertPurchase({
             'product_item_id': item.id,
             'purchased_by': uid,
             'purchase_date': record.date.toIso8601String().substring(0, 10),
@@ -246,46 +254,6 @@ class SupabaseService {
       debugPrint('[Supabase] deletePurchases 오류: $e');
       rethrow;
     }
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // 카테고리 조회 또는 생성
-  // ────────────────────────────────────────────────────────────────────────────
-
-  /// 카테고리 이름으로 UUID를 반환합니다. 없으면 새로 생성합니다.
-  static Future<String> _ensureCategory(String name) async {
-    if (_categoryCache.containsKey(name)) return _categoryCache[name]!;
-
-    final uid = currentUserId;
-
-    // 기존 카테고리 조회
-    final existing = await _db
-        .from('categories')
-        .select('id')
-        .eq('user_id', uid)
-        .eq('name', name)
-        .maybeSingle();
-
-    if (existing != null) {
-      _categoryCache[name] = existing['id'] as String;
-      return existing['id'] as String;
-    }
-
-    // 없으면 생성
-    final created = await _db
-        .from('categories')
-        .insert({
-          'user_id': uid,
-          'name': name,
-          'icon': _iconNameForCategory(name),
-          'color': '#4F7FFF',
-          'sort_order': 0,
-        })
-        .select('id')
-        .single();
-
-    _categoryCache[name] = created['id'] as String;
-    return created['id'] as String;
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -444,6 +412,16 @@ abstract class ItemDatabaseGateway {
     required String? userId,
     required String? groupId,
   });
+
+  Future<String> ensureCategory({
+    required String name,
+    required String? userId,
+    required String? groupId,
+  });
+
+  Future<void> upsertItem(Map<String, dynamic> payload);
+
+  Future<void> insertPurchase(Map<String, dynamic> payload);
 }
 
 class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
@@ -482,6 +460,50 @@ class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
         .whereType<Map<String, dynamic>>()
         .map(Map<String, dynamic>.from)
         .toList(growable: false);
+  }
+
+  @override
+  Future<String> ensureCategory({
+    required String name,
+    required String? userId,
+    required String? groupId,
+  }) async {
+    dynamic query = _client.from('categories').select('id').eq('name', name);
+    if (groupId != null) {
+      query = query.eq('group_id', groupId);
+    } else {
+      query = query.eq('user_id', userId!);
+    }
+
+    final existing = await query.maybeSingle();
+    if (existing != null) {
+      return existing['id'] as String;
+    }
+
+    final created = await _client
+        .from('categories')
+        .insert({
+          'user_id': userId,
+          'group_id': groupId,
+          'name': name,
+          'icon': SupabaseService._iconNameForCategory(name),
+          'color': '#4F7FFF',
+          'sort_order': 0,
+        })
+        .select('id')
+        .single();
+
+    return created['id'] as String;
+  }
+
+  @override
+  Future<void> upsertItem(Map<String, dynamic> payload) async {
+    await _client.from('product_items').upsert(payload);
+  }
+
+  @override
+  Future<void> insertPurchase(Map<String, dynamic> payload) async {
+    await _client.from('purchases').insert(payload);
   }
 }
 

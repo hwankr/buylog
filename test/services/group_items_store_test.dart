@@ -151,4 +151,19 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
     }
     return loadItemsResult;
   }
+
+  @override
+  Future<String> ensureCategory({
+    required String name,
+    required String? userId,
+    required String? groupId,
+  }) async {
+    return 'category-1';
+  }
+
+  @override
+  Future<void> upsertItem(Map<String, dynamic> payload) async {}
+
+  @override
+  Future<void> insertPurchase(Map<String, dynamic> payload) async {}
 }

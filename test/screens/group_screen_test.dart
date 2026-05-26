@@ -1,7 +1,9 @@
 import 'package:buylog/models/group.dart';
+import 'package:buylog/models/item.dart';
 import 'package:buylog/models/item_scope.dart';
 import 'package:buylog/screens/group_screen.dart';
 import 'package:buylog/services/group_store.dart';
+import 'package:buylog/services/item_store.dart';
 import 'package:buylog/services/supabase_service.dart';
 import 'package:buylog/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -11,11 +13,15 @@ void main() {
   setUp(() {
     GroupStore.instance.resetForTesting();
     SupabaseService.debugGroupDatabaseGateway = null;
+    SupabaseService.debugItemDatabaseGateway = null;
+    ItemStore.instance.value = [];
   });
 
   tearDown(() {
     GroupStore.instance.resetForTesting();
     SupabaseService.debugGroupDatabaseGateway = null;
+    SupabaseService.debugItemDatabaseGateway = null;
+    ItemStore.instance.value = [];
   });
 
   testWidgets('empty state renders group title and create CTA', (
@@ -172,6 +178,32 @@ void main() {
     expect(find.text('새 멤버'), findsOneWidget);
     expect(find.text('멤버 1명'), findsOneWidget);
   });
+
+  testWidgets('reloads selected group items after a scoped save event', (
+    WidgetTester tester,
+  ) async {
+    final itemGateway = _RecordingItemDatabaseGateway()
+      ..loadItemsResult = <Map<String, dynamic>>[
+        _itemRow(id: 'group-item-1', groupId: 'group-1'),
+      ];
+    SupabaseService.debugItemDatabaseGateway = itemGateway;
+
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group(id: 'group-1', name: '우리 가족')],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+
+    await ItemStore.instance.add(
+      _seedItem('new-group-item'),
+      scope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+    await tester.pump();
+
+    expect(itemGateway.loadItemsCalls, greaterThanOrEqualTo(2));
+  });
 }
 
 Widget _wrap() {
@@ -290,4 +322,63 @@ Map<String, dynamic> _groupRow({
       },
     ],
   };
+}
+
+ConsumableItem _seedItem(String id) {
+  return ConsumableItem(
+    id: id,
+    name: '세제',
+    brand: '브랜드',
+    category: '주방/세제',
+    icon: ConsumableItem.iconForCategory('주방/세제'),
+    daysRemaining: 30,
+    cycleDays: 30,
+    progress: 0,
+  );
+}
+
+Map<String, dynamic> _itemRow({required String id, String? groupId}) {
+  return <String, dynamic>{
+    'id': id,
+    'user_id': null,
+    'group_id': groupId,
+    'registered_by': SupabaseService.currentUserId,
+    'name': '세제',
+    'brand': '브랜드',
+    'image_url': null,
+    'replacement_cycle_days': 30,
+    'created_at': '2026-05-27T00:00:00.000Z',
+    'categories': <String, dynamic>{'id': 'category-1', 'name': '주방/세제'},
+    'purchases': <Map<String, dynamic>>[],
+    'ai_predictions': <Map<String, dynamic>>[],
+  };
+}
+
+class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
+  int loadItemsCalls = 0;
+  List<Map<String, dynamic>> loadItemsResult = const [];
+
+  @override
+  Future<List<Map<String, dynamic>>> loadItems({
+    required String? userId,
+    required String? groupId,
+  }) async {
+    loadItemsCalls += 1;
+    return loadItemsResult;
+  }
+
+  @override
+  Future<String> ensureCategory({
+    required String name,
+    required String? userId,
+    required String? groupId,
+  }) async {
+    return 'category-1';
+  }
+
+  @override
+  Future<void> upsertItem(Map<String, dynamic> payload) async {}
+
+  @override
+  Future<void> insertPurchase(Map<String, dynamic> payload) async {}
 }
