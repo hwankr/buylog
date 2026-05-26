@@ -4,16 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:buylog/models/group.dart';
+import 'package:buylog/models/item_scope.dart';
 import 'package:buylog/services/supabase_service.dart';
 
 class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
+  int loadGroupsForUserCalls = 0;
   int createGroupWithOwnerCalls = 0;
   int loadGroupMembersCalls = 0;
   String? createGroupWithOwnerName;
   String? createGroupWithOwnerInviteCode;
   String? loadGroupMembersGroupId;
   Map<String, dynamic>? loadDefaultGroupResult;
+  List<Map<String, dynamic>> loadGroupsForUserResult = const [];
   Map<String, dynamic>? createGroupWithOwnerResult;
   Object? createGroupWithOwnerError;
   List<Map<String, dynamic>> loadGroupMembersResult = const [];
@@ -22,6 +25,12 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
     loadDefaultGroupCalls += 1;
     return loadDefaultGroupResult;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> loadGroupsForUser(String userId) async {
+    loadGroupsForUserCalls += 1;
+    return loadGroupsForUserResult;
   }
 
   @override
@@ -67,6 +76,50 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
     loadGroupMembersGroupId = groupId;
     return loadGroupMembersResult;
   }
+}
+
+class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
+  String? lastUserId;
+  String? lastGroupId;
+  List<Map<String, dynamic>> loadItemsResult = const [];
+
+  @override
+  Future<List<Map<String, dynamic>>> loadItems({
+    required String? userId,
+    required String? groupId,
+  }) async {
+    lastUserId = userId;
+    lastGroupId = groupId;
+    return loadItemsResult;
+  }
+}
+
+Map<String, dynamic> _itemRow({
+  required String id,
+  String? userId,
+  String? groupId,
+}) {
+  return <String, dynamic>{
+    'id': id,
+    'user_id': userId,
+    'group_id': groupId,
+    'registered_by': userId ?? SupabaseService.currentUserId,
+    'name': '세제',
+    'brand': '브랜드',
+    'image_url': null,
+    'replacement_cycle_days': 30,
+    'created_at': '2026-05-26T00:00:00.000Z',
+    'categories': <String, dynamic>{'id': 'category-1', 'name': '주방/세제'},
+    'purchases': <Map<String, dynamic>>[
+      <String, dynamic>{
+        'id': 'purchase-1',
+        'purchase_date': '2026-05-20',
+        'price': 8900,
+        'store_name': '마트',
+      },
+    ],
+    'ai_predictions': <Map<String, dynamic>>[],
+  };
 }
 
 class _FailingImageStorageGateway implements ProductImageStorageGateway {
@@ -245,6 +298,45 @@ void main() {
       );
 
       expect(gateway.loadGroupMembersCalls, 0);
+    });
+  });
+
+  group('SupabaseService.loadItemsForScope', () {
+    tearDown(() {
+      SupabaseService.debugItemDatabaseGateway = null;
+    });
+
+    test('loads personal items through user id', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'personal-1', userId: SupabaseService.currentUserId),
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.personal(),
+      );
+
+      expect(items.single.id, 'personal-1');
+      expect(gateway.lastUserId, SupabaseService.currentUserId);
+      expect(gateway.lastGroupId, isNull);
+    });
+
+    test('loads group items through group id', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'group-item-1', groupId: 'group-1'),
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.group(id: 'group-1', label: '우리 가족'),
+      );
+
+      expect(items.single.id, 'group-item-1');
+      expect(items.single.groupId, 'group-1');
+      expect(gateway.lastUserId, isNull);
+      expect(gateway.lastGroupId, 'group-1');
     });
   });
 

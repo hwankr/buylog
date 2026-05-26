@@ -1,4 +1,5 @@
 import 'package:buylog/models/group.dart';
+import 'package:buylog/models/item_scope.dart';
 import 'package:buylog/services/group_store.dart';
 import 'package:buylog/services/supabase_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -130,6 +131,26 @@ void main() {
     });
   });
 
+  group('ItemScope', () {
+    test('builds the personal scope label', () {
+      const scope = ItemScope.personal();
+
+      expect(scope.type, ItemScopeType.personal);
+      expect(scope.id, isNull);
+      expect(scope.label, '내 물품');
+      expect(scope.storageKey, 'personal');
+    });
+
+    test('builds a group scope label and stable key', () {
+      const scope = ItemScope.group(id: 'group-1', label: '우리 가족');
+
+      expect(scope.type, ItemScopeType.group);
+      expect(scope.id, 'group-1');
+      expect(scope.label, '우리 가족');
+      expect(scope.storageKey, 'group:group-1');
+    });
+  });
+
   group('GroupStore', () {
     late _RecordingGroupDatabaseGateway gateway;
 
@@ -151,11 +172,11 @@ void main() {
       expect(GroupStore.instance.value.isLoading, isFalse);
       expect(GroupStore.instance.value.isSaving, isFalse);
       expect(GroupStore.instance.value.errorMessage, isNull);
-      expect(gateway.loadDefaultGroupCalls, 1);
+      expect(gateway.loadGroupsForUserCalls, 1);
     });
 
     test('sets Korean error state and rethrows when preload fails', () async {
-      gateway.loadDefaultGroupError = StateError('load failed');
+      gateway.loadGroupsForUserError = StateError('load failed');
 
       await expectLater(
         GroupStore.instance.initialize(),
@@ -172,7 +193,7 @@ void main() {
       expect(GroupStore.instance.value.isLoading, isFalse);
       expect(GroupStore.instance.value.isSaving, isFalse);
       expect(GroupStore.instance.value.errorMessage, '그룹 정보를 불러오지 못했습니다.');
-      expect(gateway.loadDefaultGroupCalls, 1);
+      expect(gateway.loadGroupsForUserCalls, 1);
     });
 
     test('creates a group and exposes it through state', () async {
@@ -187,6 +208,35 @@ void main() {
       expect(GroupStore.instance.value.errorMessage, isNull);
       expect(gateway.createdGroupValues?['name'], 'My Group');
       expect(gateway.loadDefaultGroupCalls, 0);
+    });
+
+    test('builds personal and joined group scopes after initialize', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+
+      await GroupStore.instance.initialize();
+
+      final scopes = GroupStore.instance.value.availableScopes;
+      expect(scopes.map((scope) => scope.label), ['내 물품', '우리 가족', '사무실']);
+      expect(
+        GroupStore.instance.value.selectedScope,
+        const ItemScope.personal(),
+      );
+    });
+
+    test('selectScope switches to a joined group scope', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+      ];
+      await GroupStore.instance.initialize();
+
+      GroupStore.instance.selectScope(
+        const ItemScope.group(id: 'group-1', label: '우리 가족'),
+      );
+
+      expect(GroupStore.instance.value.selectedScope.label, '우리 가족');
     });
 
     test(
@@ -318,11 +368,14 @@ Map<String, dynamic> _groupRow({String id = 'group-1', required String name}) {
 
 class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
+  int loadGroupsForUserCalls = 0;
   int loadGroupMembersCalls = 0;
   Object? loadDefaultGroupError;
+  Object? loadGroupsForUserError;
   Object? loadGroupMembersError;
   String? loadGroupMembersGroupId;
   Map<String, dynamic>? loadDefaultGroupResult;
+  List<Map<String, dynamic>> loadGroupsForUserResult = const [];
   Map<String, dynamic>? createdGroupValues;
   Object? createGroupWithOwnerError;
   List<Map<String, dynamic>> loadGroupMembersResult = const [];
@@ -334,6 +387,20 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
       throw loadDefaultGroupError!;
     }
     return loadDefaultGroupResult;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> loadGroupsForUser(String userId) async {
+    loadGroupsForUserCalls += 1;
+    if (loadGroupsForUserError != null) {
+      throw loadGroupsForUserError!;
+    }
+    if (loadGroupsForUserResult.isNotEmpty) {
+      return loadGroupsForUserResult;
+    }
+    return loadDefaultGroupResult == null
+        ? const <Map<String, dynamic>>[]
+        : <Map<String, dynamic>>[loadDefaultGroupResult!];
   }
 
   @override

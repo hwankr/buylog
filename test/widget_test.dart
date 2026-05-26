@@ -67,6 +67,11 @@ class _ThrowingGroupDatabaseGateway implements GroupDatabaseGateway {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> loadGroupsForUser(String userId) async {
+    throw StateError('group preload failed');
+  }
+
+  @override
   Future<Map<String, dynamic>> createGroupWithOwner({
     required String name,
     required String inviteCode,

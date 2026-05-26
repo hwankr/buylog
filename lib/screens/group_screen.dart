@@ -1,11 +1,40 @@
 import 'package:flutter/material.dart';
 
 import '../models/group.dart';
+import '../models/item_scope.dart';
+import '../services/group_items_store.dart';
 import '../services/group_store.dart';
 import '../theme/app_theme.dart';
+import '../widgets/group/group_scoped_item_list.dart';
+import '../widgets/group/item_scope_tabs.dart';
 
-class GroupScreen extends StatelessWidget {
+class GroupScreen extends StatefulWidget {
   const GroupScreen({super.key});
+
+  @override
+  State<GroupScreen> createState() => _GroupScreenState();
+}
+
+class _GroupScreenState extends State<GroupScreen> {
+  late final GroupItemsStore _itemsStore;
+
+  @override
+  void initState() {
+    super.initState();
+    _itemsStore = GroupItemsStore();
+    _itemsStore.load(GroupStore.instance.value.selectedScope);
+  }
+
+  @override
+  void dispose() {
+    _itemsStore.dispose();
+    super.dispose();
+  }
+
+  void _selectScope(ItemScope scope) {
+    GroupStore.instance.selectScope(scope);
+    _itemsStore.load(scope);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,20 +46,55 @@ class GroupScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
+          final selectedGroup = state.groupForScope(state.selectedScope);
+
           return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            padding: const EdgeInsets.fromLTRB(0, 20, 0, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('그룹', style: Theme.of(context).textTheme.headlineMedium),
-                const SizedBox(height: 20),
-                if (state.group == null)
-                  _EmptyGroupState(errorMessage: state.errorMessage)
-                else
-                  _GroupCard(
-                    group: state.group!,
-                    isRefreshingMembers: state.isRefreshingMembers,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    '그룹',
+                    style: Theme.of(context).textTheme.headlineMedium,
                   ),
+                ),
+                const SizedBox(height: 16),
+                ItemScopeTabs(
+                  scopes: state.availableScopes,
+                  selectedScope: state.selectedScope,
+                  onSelected: _selectScope,
+                ),
+                const SizedBox(height: 16),
+                if (selectedGroup != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _GroupCard(
+                      group: selectedGroup,
+                      isRefreshingMembers: state.isRefreshingMembers,
+                      onRefreshMembers: () => GroupStore.instance
+                          .refreshMembers(groupId: selectedGroup.id),
+                    ),
+                  )
+                else if (state.visibleGroups.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _EmptyGroupState(errorMessage: state.errorMessage),
+                  ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    '${state.selectedScope.label} 목록',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                ValueListenableBuilder<GroupItemsState>(
+                  valueListenable: _itemsStore,
+                  builder: (context, itemState, _) =>
+                      GroupScopedItemList(state: itemState),
+                ),
               ],
             ),
           );
@@ -122,10 +186,15 @@ class _EmptyGroupState extends StatelessWidget {
 }
 
 class _GroupCard extends StatelessWidget {
-  const _GroupCard({required this.group, required this.isRefreshingMembers});
+  const _GroupCard({
+    required this.group,
+    required this.isRefreshingMembers,
+    required this.onRefreshMembers,
+  });
 
   final BuylogGroup group;
   final bool isRefreshingMembers;
+  final VoidCallback onRefreshMembers;
 
   @override
   Widget build(BuildContext context) {
@@ -191,9 +260,7 @@ class _GroupCard extends StatelessWidget {
               ),
               IconButton(
                 tooltip: '멤버 새로고침',
-                onPressed: isRefreshingMembers
-                    ? null
-                    : () => GroupStore.instance.refreshMembers(),
+                onPressed: isRefreshingMembers ? null : onRefreshMembers,
                 icon: isRefreshingMembers
                     ? const SizedBox(
                         width: 18,

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/group.dart';
 import '../models/item.dart';
+import '../models/item_scope.dart';
 
 /// Supabase 연동 서비스
 ///
@@ -26,8 +27,14 @@ class SupabaseService {
   @visibleForTesting
   static GroupDatabaseGateway? debugGroupDatabaseGateway;
 
+  @visibleForTesting
+  static ItemDatabaseGateway? debugItemDatabaseGateway;
+
   static GroupDatabaseGateway get _groupDatabaseGateway =>
       debugGroupDatabaseGateway ?? SupabaseGroupDatabaseGateway(_db);
+
+  static ItemDatabaseGateway get _itemDatabaseGateway =>
+      debugItemDatabaseGateway ?? SupabaseItemDatabaseGateway(_db);
 
   // ────────────────────────────────────────────────────────────────────────────
   // 초기화 & 인증
@@ -52,6 +59,11 @@ class SupabaseService {
     }
 
     return BuylogGroup.fromSupabase(row);
+  }
+
+  static Future<List<BuylogGroup>> loadGroupsForUser() async {
+    final rows = await _groupDatabaseGateway.loadGroupsForUser(currentUserId);
+    return rows.map(BuylogGroup.fromSupabase).toList(growable: false);
   }
 
   static Future<BuylogGroup> createGroup({required String name}) async {
@@ -120,48 +132,8 @@ class SupabaseService {
 
   /// 현재 사용자의 모든 제품을 Supabase에서 불러옵니다.
   static Future<List<ConsumableItem>> loadItems() async {
-    final uid = currentUserId;
     try {
-      final rows = await _db
-          .from('product_items')
-          .select('''
-          id,
-          name,
-          brand,
-          image_url,
-          replacement_cycle_days,
-          created_at,
-          categories ( id, name ),
-          purchases ( id, purchase_date, price, store_name ),
-          ai_predictions ( predicted_cycle_days, confidence )
-        ''')
-          .eq('user_id', uid)
-          .order('created_at', ascending: false);
-
-      return rows.map<ConsumableItem>((row) {
-        final categoryName =
-            (row['categories'] as Map<String, dynamic>?)?['name'] as String? ??
-            '기타';
-
-        final purchases =
-            (row['purchases'] as List<dynamic>?)
-                ?.cast<Map<String, dynamic>>() ??
-            [];
-
-        final aiList =
-            (row['ai_predictions'] as List<dynamic>?)
-                ?.cast<Map<String, dynamic>>() ??
-            [];
-        // 가장 최근 AI 예측 1건 사용
-        final ai = aiList.isNotEmpty ? aiList.last : null;
-
-        return ConsumableItem.fromSupabase(
-          data: row,
-          categoryName: categoryName,
-          purchases: purchases,
-          aiPrediction: ai,
-        );
-      }).toList();
+      return await loadItemsForScope(const ItemScope.personal());
     } catch (e) {
       debugPrint('[Supabase] loadItems 오류: $e');
       return [];
@@ -171,6 +143,35 @@ class SupabaseService {
   // ────────────────────────────────────────────────────────────────────────────
   // 제품 저장 (신규 등록 & 수정)
   // ────────────────────────────────────────────────────────────────────────────
+
+  static Future<List<ConsumableItem>> loadItemsForScope(ItemScope scope) async {
+    final rows = await _itemDatabaseGateway.loadItems(
+      userId: scope.isPersonal ? currentUserId : null,
+      groupId: scope.isGroup ? scope.id : null,
+    );
+    return rows.map(_itemFromJoinedRow).toList(growable: false);
+  }
+
+  static ConsumableItem _itemFromJoinedRow(Map<String, dynamic> row) {
+    final categoryName =
+        (row['categories'] as Map<String, dynamic>?)?['name'] as String? ??
+        '기타';
+    final purchases =
+        (row['purchases'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ??
+        <Map<String, dynamic>>[];
+    final aiList =
+        (row['ai_predictions'] as List<dynamic>?)
+            ?.cast<Map<String, dynamic>>() ??
+        <Map<String, dynamic>>[];
+    final ai = aiList.isNotEmpty ? aiList.last : null;
+
+    return ConsumableItem.fromSupabase(
+      data: row,
+      categoryName: categoryName,
+      purchases: purchases,
+      aiPrediction: ai,
+    );
+  }
 
   /// ConsumableItem을 Supabase에 upsert합니다.
   ///
@@ -331,6 +332,8 @@ class SupabaseService {
 abstract class GroupDatabaseGateway {
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId);
 
+  Future<List<Map<String, dynamic>>> loadGroupsForUser(String userId);
+
   Future<Map<String, dynamic>> createGroupWithOwner({
     required String name,
     required String inviteCode,
@@ -391,6 +394,21 @@ class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
   }
 
   @override
+  Future<List<Map<String, dynamic>>> loadGroupsForUser(String userId) async {
+    final rows = await _client
+        .from('group_members')
+        .select('groups ($_groupProjection)')
+        .eq('user_id', userId)
+        .order('joined_at', ascending: true);
+    return rows
+        .whereType<Map<String, dynamic>>()
+        .map((row) => row['groups'])
+        .whereType<Map<String, dynamic>>()
+        .map(Map<String, dynamic>.from)
+        .toList(growable: false);
+  }
+
+  @override
   Future<Map<String, dynamic>> createGroupWithOwner({
     required String name,
     required String inviteCode,
@@ -414,6 +432,52 @@ class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
         .select(_memberProjection)
         .eq('group_id', groupId)
         .order('joined_at', ascending: true);
+    return rows
+        .whereType<Map<String, dynamic>>()
+        .map(Map<String, dynamic>.from)
+        .toList(growable: false);
+  }
+}
+
+abstract class ItemDatabaseGateway {
+  Future<List<Map<String, dynamic>>> loadItems({
+    required String? userId,
+    required String? groupId,
+  });
+}
+
+class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
+  const SupabaseItemDatabaseGateway(this._client);
+
+  final SupabaseClient _client;
+
+  static const _itemProjection = '''
+          id,
+          user_id,
+          group_id,
+          registered_by,
+          name,
+          brand,
+          image_url,
+          replacement_cycle_days,
+          created_at,
+          categories ( id, name ),
+          purchases ( id, purchase_date, price, store_name ),
+          ai_predictions ( predicted_cycle_days, confidence )
+        ''';
+
+  @override
+  Future<List<Map<String, dynamic>>> loadItems({
+    required String? userId,
+    required String? groupId,
+  }) async {
+    dynamic query = _client.from('product_items').select(_itemProjection);
+    if (groupId != null) {
+      query = query.eq('group_id', groupId);
+    } else {
+      query = query.eq('user_id', userId!);
+    }
+    final rows = await query.order('created_at', ascending: false);
     return rows
         .whereType<Map<String, dynamic>>()
         .map(Map<String, dynamic>.from)

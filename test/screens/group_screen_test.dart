@@ -1,4 +1,5 @@
 import 'package:buylog/models/group.dart';
+import 'package:buylog/models/item_scope.dart';
 import 'package:buylog/screens/group_screen.dart';
 import 'package:buylog/services/group_store.dart';
 import 'package:buylog/services/supabase_service.dart';
@@ -61,7 +62,7 @@ void main() {
     expect(gateway.loadDefaultGroupCalls, 0);
     expect(gateway.createdGroupValues?['name'], '우리 가족');
     expect(find.byType(AlertDialog), findsNothing);
-    expect(find.text('우리 가족'), findsOneWidget);
+    expect(find.text('우리 가족'), findsAtLeastNWidgets(1));
     expect(
       find.text('초대 코드: ${gateway.createdGroupValues?['invite_code']}'),
       findsOneWidget,
@@ -100,16 +101,44 @@ void main() {
   testWidgets('saved group state renders group summary and member names', (
     WidgetTester tester,
   ) async {
-    GroupStore.instance.value = GroupState(group: _group());
+    GroupStore.instance.value = GroupState(
+      group: _group(),
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
 
     await tester.pumpWidget(_wrap());
 
-    expect(find.text('우리 가족'), findsOneWidget);
+    expect(find.text('우리 가족'), findsAtLeastNWidgets(1));
     expect(find.text('초대 코드: BUY-ABC123'), findsOneWidget);
     expect(find.text('멤버 2명'), findsOneWidget);
     expect(find.text('소유자'), findsOneWidget);
     expect(find.text('멤버'), findsNWidgets(2));
     expect(find.text('관리자'), findsOneWidget);
+  });
+
+  testWidgets('renders scope tabs and switches selected group tab', (
+    WidgetTester tester,
+  ) async {
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[
+        _group(id: 'group-1', name: '우리 가족'),
+        _group(id: 'group-2', name: '사무실'),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap());
+
+    expect(find.text('내 물품'), findsOneWidget);
+    expect(find.text('우리 가족'), findsOneWidget);
+    expect(find.text('사무실'), findsOneWidget);
+
+    await tester.tap(find.text('사무실'));
+    await tester.pump();
+
+    expect(
+      GroupStore.instance.value.selectedScope,
+      const ItemScope.group(id: 'group-2', label: '사무실'),
+    );
   });
 
   testWidgets('member refresh button reloads and renders latest members', (
@@ -129,7 +158,10 @@ void main() {
         },
       ];
     SupabaseService.debugGroupDatabaseGateway = gateway;
-    GroupStore.instance.value = GroupState(group: _group());
+    GroupStore.instance.value = GroupState(
+      group: _group(),
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
 
     await tester.pumpWidget(_wrap());
     await tester.tap(find.byTooltip('멤버 새로고침'));
@@ -149,10 +181,10 @@ Widget _wrap() {
   );
 }
 
-BuylogGroup _group() {
+BuylogGroup _group({String id = 'group-1', String name = '우리 가족'}) {
   return BuylogGroup(
-    id: 'group-1',
-    name: '우리 가족',
+    id: id,
+    name: name,
     inviteCode: 'BUY-ABC123',
     createdBy: 'user-1',
     createdAt: DateTime.parse('2026-05-26T00:00:00.000Z'),
@@ -190,6 +222,13 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
     return _currentGroup == null
         ? null
         : Map<String, dynamic>.from(_currentGroup!);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> loadGroupsForUser(String userId) async {
+    return _currentGroup == null
+        ? const <Map<String, dynamic>>[]
+        : <Map<String, dynamic>>[Map<String, dynamic>.from(_currentGroup!)];
   }
 
   @override
