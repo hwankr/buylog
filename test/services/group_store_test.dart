@@ -14,6 +14,11 @@ void main() {
       expect(GroupRole.fromDatabase('owner').databaseValue, 'owner');
       expect(GroupRole.fromDatabase('member').databaseValue, 'member');
     });
+
+    test('exposes Korean display labels for member role badges', () {
+      expect(GroupRole.owner.displayLabel, '관리자');
+      expect(GroupRole.member.displayLabel, '멤버');
+    });
   });
 
   group('BuylogGroup Supabase parsing', () {
@@ -62,6 +67,38 @@ void main() {
 
       expect(group.members, isEmpty);
       expect(() => group.members.add(_member()), throwsUnsupportedError);
+    });
+
+    test('copyWith replaces members without mutating the original group', () {
+      final original = BuylogGroup.fromSupabase({
+        'id': 'group-1',
+        'name': '우리 가족',
+        'invite_code': 'ABC123',
+        'created_by': 'user-1',
+        'created_at': '2026-05-26T10:20:30.000Z',
+        'group_members': [
+          {
+            'id': 'member-1',
+            'user_id': 'user-1',
+            'role': 'owner',
+            'joined_at': '2026-05-26T10:21:30.000Z',
+            'users': {'display_name': '소유자', 'email': 'owner@example.com'},
+          },
+        ],
+      });
+      final nextMember = BuylogGroupMember.fromSupabase({
+        'id': 'member-2',
+        'user_id': 'user-2',
+        'role': 'member',
+        'joined_at': '2026-05-26T10:22:30.000Z',
+        'users': {'display_name': '멤버', 'email': 'member@example.com'},
+      });
+
+      final updated = original.copyWith(members: [nextMember]);
+
+      expect(original.members.single.userId, 'user-1');
+      expect(updated.members.single.userId, 'user-2');
+      expect(() => updated.members.add(nextMember), throwsUnsupportedError);
     });
   });
 

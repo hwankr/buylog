@@ -12,6 +12,13 @@ enum GroupRole {
       GroupRole.member => 'member',
     };
   }
+
+  String get displayLabel {
+    return switch (this) {
+      GroupRole.owner => '관리자',
+      GroupRole.member => '멤버',
+    };
+  }
 }
 
 class BuylogGroup {
@@ -30,6 +37,26 @@ class BuylogGroup {
     required this.createdAt,
     this.members = const [],
   });
+
+  BuylogGroup copyWith({
+    String? id,
+    String? name,
+    String? inviteCode,
+    String? createdBy,
+    DateTime? createdAt,
+    List<BuylogGroupMember>? members,
+  }) {
+    return BuylogGroup(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      inviteCode: inviteCode ?? this.inviteCode,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
+      members: members == null
+          ? this.members
+          : List<BuylogGroupMember>.unmodifiable(members),
+    );
+  }
 
   factory BuylogGroup.fromSupabase(Map<String, dynamic> row) {
     final members = row['group_members'] as List<dynamic>?;
