@@ -1,8 +1,45 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
+import '../services/notification_service.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _notificationEnabled = true;
+  late SharedPreferences _prefs;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationPreference();
+  }
+
+  Future<void> _loadNotificationPreference() async {
+    _prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _notificationEnabled = _prefs.getBool('notification_enabled') ?? true;
+    });
+  }
+
+  Future<void> _toggleNotification(bool value) async {
+    setState(() {
+      _notificationEnabled = value;
+    });
+
+    await _prefs.setBool('notification_enabled', value);
+
+    if (value) {
+      await NotificationService().scheduleAll();
+    } else {
+      await NotificationService().cancelAll();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +111,11 @@ class SettingsScreen extends StatelessWidget {
                 Icons.notifications_outlined,
                 '알림 설정',
                 subtitle: 'D-day 알림, 가격 변동 알림',
+                trailing: Switch(
+                  value: _notificationEnabled,
+                  onChanged: _toggleNotification,
+                  activeThumbColor: AppColors.primary,
+                ),
               ),
               _settingsTile(Icons.palette_outlined, '테마', subtitle: '라이트 모드'),
               _settingsTile(Icons.language_outlined, '언어', subtitle: '한국어'),
