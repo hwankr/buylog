@@ -44,12 +44,7 @@ class NotificationService {
       android: androidDetails,
     );
 
-    await _localNotifications.show(
-      id: 0,
-      title: title,
-      body: body,
-      notificationDetails: details,
-    );
+    await _localNotifications.show(0, title, body, details);
   }
 
   Future<void> scheduleAll() async {
