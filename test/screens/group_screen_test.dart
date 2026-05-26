@@ -170,6 +170,18 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
     return group;
   }
 
+  @override
+  Future<List<Map<String, dynamic>>> loadGroupMembers({
+    required String groupId,
+  }) async {
+    return _currentGroup == null
+        ? const <Map<String, dynamic>>[]
+        : List<Map<String, dynamic>>.from(
+            (_currentGroup!['group_members'] as List<dynamic>)
+                .whereType<Map<String, dynamic>>(),
+          );
+  }
+
   Future<void> insertGroupMember(Map<String, dynamic> values) async {}
 
   Future<void> updateDefaultGroup({

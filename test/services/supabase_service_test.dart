@@ -3,16 +3,20 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:buylog/models/group.dart';
 import 'package:buylog/services/supabase_service.dart';
 
 class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
   int createGroupWithOwnerCalls = 0;
+  int loadGroupMembersCalls = 0;
   String? createGroupWithOwnerName;
   String? createGroupWithOwnerInviteCode;
+  String? loadGroupMembersGroupId;
   Map<String, dynamic>? loadDefaultGroupResult;
   Map<String, dynamic>? createGroupWithOwnerResult;
   Object? createGroupWithOwnerError;
+  List<Map<String, dynamic>> loadGroupMembersResult = const [];
 
   @override
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
@@ -53,6 +57,15 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
             },
           ],
         };
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> loadGroupMembers({
+    required String groupId,
+  }) async {
+    loadGroupMembersCalls += 1;
+    loadGroupMembersGroupId = groupId;
+    return loadGroupMembersResult;
   }
 }
 
@@ -178,6 +191,69 @@ void main() {
       expect(gateway.createGroupWithOwnerCalls, 1);
       expect(gateway.createGroupWithOwnerName, 'Group Name');
       expect(gateway.loadDefaultGroupCalls, 0);
+    });
+  });
+
+  group('SupabaseService.loadGroupMembers', () {
+    tearDown(() {
+      SupabaseService.debugGroupDatabaseGateway = null;
+    });
+
+    test('loads group members through the gateway and maps roles', () async {
+      final gateway = _RecordingGroupDatabaseGateway()
+        ..loadGroupMembersResult = <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'member-1',
+            'user_id': 'user-1',
+            'role': 'owner',
+            'joined_at': '2026-05-26T10:00:00.000Z',
+            'users': <String, dynamic>{
+              'display_name': '소유자',
+              'email': 'owner@example.com',
+            },
+          },
+          <String, dynamic>{
+            'id': 'member-2',
+            'user_id': 'user-2',
+            'role': 'member',
+            'joined_at': '2026-05-26T10:01:00.000Z',
+            'users': <String, dynamic>{
+              'display_name': '멤버',
+              'email': 'member@example.com',
+            },
+          },
+        ];
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      final members = await SupabaseService.loadGroupMembers(
+        groupId: ' group-1 ',
+      );
+
+      expect(gateway.loadGroupMembersCalls, 1);
+      expect(gateway.loadGroupMembersGroupId, 'group-1');
+      expect(members, hasLength(2));
+      expect(members.first.displayName, '소유자');
+      expect(members.first.role, GroupRole.owner);
+      expect(members.last.displayName, '멤버');
+      expect(members.last.role, GroupRole.member);
+    });
+
+    test('rejects blank group ids without calling the gateway', () async {
+      final gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      await expectLater(
+        SupabaseService.loadGroupMembers(groupId: '   '),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.message,
+            'message',
+            'Group id is required.',
+          ),
+        ),
+      );
+
+      expect(gateway.loadGroupMembersCalls, 0);
     });
   });
 

@@ -290,4 +290,11 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
       'group_members': <Map<String, dynamic>>[],
     };
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> loadGroupMembers({
+    required String groupId,
+  }) async {
+    return const <Map<String, dynamic>>[];
+  }
 }

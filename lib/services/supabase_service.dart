@@ -67,6 +67,22 @@ class SupabaseService {
     return BuylogGroup.fromSupabase(createdGroup);
   }
 
+  static Future<List<BuylogGroupMember>> loadGroupMembers({
+    required String groupId,
+  }) async {
+    final trimmedGroupId = groupId.trim();
+    if (trimmedGroupId.isEmpty) {
+      throw ArgumentError.value(groupId, 'groupId', 'Group id is required.');
+    }
+
+    final rows = await _groupDatabaseGateway.loadGroupMembers(
+      groupId: trimmedGroupId,
+    );
+    return List<BuylogGroupMember>.unmodifiable(
+      rows.map(BuylogGroupMember.fromSupabase),
+    );
+  }
+
   // ────────────────────────────────────────────────────────────────────────────
   // 이미지 업로드
   // ────────────────────────────────────────────────────────────────────────────
@@ -319,18 +335,16 @@ abstract class GroupDatabaseGateway {
     required String name,
     required String inviteCode,
   });
+
+  Future<List<Map<String, dynamic>>> loadGroupMembers({
+    required String groupId,
+  });
 }
 
 class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
   SupabaseGroupDatabaseGateway(this._client);
 
-  static const _groupProjection = '''
-        id,
-        name,
-        invite_code,
-        created_by,
-        created_at,
-        group_members (
+  static const _memberProjection = '''
           id,
           user_id,
           role,
@@ -339,6 +353,16 @@ class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
             display_name,
             email
           )
+      ''';
+
+  static const _groupProjection = '''
+        id,
+        name,
+        invite_code,
+        created_by,
+        created_at,
+        group_members (
+          $_memberProjection
         )
       ''';
 
@@ -378,6 +402,21 @@ class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
         .select(_groupProjection)
         .single();
     return Map<String, dynamic>.from(row);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> loadGroupMembers({
+    required String groupId,
+  }) async {
+    final rows = await _client
+        .from('group_members')
+        .select(_memberProjection)
+        .eq('group_id', groupId)
+        .order('joined_at', ascending: true);
+    return rows
+        .whereType<Map<String, dynamic>>()
+        .map(Map<String, dynamic>.from)
+        .toList(growable: false);
   }
 }
 
