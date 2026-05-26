@@ -1,4 +1,6 @@
 import 'package:buylog/models/group.dart';
+import 'package:buylog/services/group_store.dart';
+import 'package:buylog/services/supabase_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -90,6 +92,74 @@ void main() {
       expect(member.role, GroupRole.member);
     });
   });
+
+  group('GroupStore', () {
+    late _RecordingGroupDatabaseGateway gateway;
+
+    setUp(() {
+      gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+      GroupStore.instance.resetForTesting();
+    });
+
+    tearDown(() {
+      GroupStore.instance.resetForTesting();
+      SupabaseService.debugGroupDatabaseGateway = null;
+    });
+
+    test('loads empty state when no default group exists', () async {
+      await GroupStore.instance.initialize();
+
+      expect(GroupStore.instance.value.group, isNull);
+      expect(GroupStore.instance.value.isLoading, isFalse);
+      expect(GroupStore.instance.value.isSaving, isFalse);
+      expect(GroupStore.instance.value.errorMessage, isNull);
+      expect(gateway.loadDefaultGroupCalls, 1);
+    });
+
+    test('creates a group and exposes it through state', () async {
+      gateway.loadDefaultGroupResult = _groupRow(name: 'My Group');
+
+      await GroupStore.instance.createGroup('  My Group  ');
+
+      expect(GroupStore.instance.value.group?.id, 'group-1');
+      expect(GroupStore.instance.value.group?.name, 'My Group');
+      expect(GroupStore.instance.value.isLoading, isFalse);
+      expect(GroupStore.instance.value.isSaving, isFalse);
+      expect(GroupStore.instance.value.errorMessage, isNull);
+      expect(gateway.insertedGroupValues?['name'], 'My Group');
+      expect(gateway.loadDefaultGroupCalls, 1);
+    });
+
+    test(
+      'restores previous state and sets Korean error message when creation fails',
+      () async {
+        gateway.loadDefaultGroupResult = _groupRow(name: 'Existing Group');
+        await GroupStore.instance.initialize();
+        gateway.updateDefaultGroupError = StateError('create failed');
+
+        await expectLater(
+          GroupStore.instance.createGroup('Next Group'),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              'create failed',
+            ),
+          ),
+        );
+
+        expect(GroupStore.instance.value.group?.id, 'group-1');
+        expect(GroupStore.instance.value.group?.name, 'Existing Group');
+        expect(GroupStore.instance.value.isLoading, isFalse);
+        expect(GroupStore.instance.value.isSaving, isFalse);
+        expect(
+          GroupStore.instance.value.errorMessage,
+          '그룹을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        );
+      },
+    );
+  });
 }
 
 BuylogGroupMember _member() {
@@ -100,4 +170,68 @@ BuylogGroupMember _member() {
     role: GroupRole.member,
     joinedAt: DateTime.parse('2026-05-26T10:21:30.000Z'),
   );
+}
+
+Map<String, dynamic> _groupRow({
+  String id = 'group-1',
+  required String name,
+}) {
+  return <String, dynamic>{
+    'id': id,
+    'name': name,
+    'invite_code': 'BUY-ABC123',
+    'created_by': SupabaseService.currentUserId,
+    'created_at': '2026-05-26T00:00:00.000Z',
+    'group_members': <Map<String, dynamic>>[
+      <String, dynamic>{
+        'id': 'member-1',
+        'user_id': SupabaseService.currentUserId,
+        'role': 'owner',
+        'joined_at': '2026-05-26T00:00:00.000Z',
+        'users': <String, dynamic>{
+          'display_name': 'Owner',
+          'email': 'owner@example.com',
+        },
+      },
+    ],
+  };
+}
+
+class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
+  int loadDefaultGroupCalls = 0;
+  Map<String, dynamic>? loadDefaultGroupResult;
+  Map<String, dynamic>? insertedGroupValues;
+  Object? updateDefaultGroupError;
+
+  @override
+  Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
+    loadDefaultGroupCalls += 1;
+    return loadDefaultGroupResult;
+  }
+
+  @override
+  Future<Map<String, dynamic>> insertGroup(Map<String, dynamic> values) async {
+    insertedGroupValues = Map<String, dynamic>.from(values);
+    return <String, dynamic>{
+      'id': 'group-1',
+      'name': values['name'],
+      'invite_code': values['invite_code'],
+      'created_by': values['created_by'],
+      'created_at': '2026-05-26T00:00:00.000Z',
+      'group_members': <Map<String, dynamic>>[],
+    };
+  }
+
+  @override
+  Future<void> insertGroupMember(Map<String, dynamic> values) async {}
+
+  @override
+  Future<void> updateDefaultGroup({
+    required String userId,
+    required String groupId,
+  }) async {
+    if (updateDefaultGroupError != null) {
+      throw updateDefaultGroupError!;
+    }
+  }
 }

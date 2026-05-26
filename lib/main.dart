@@ -9,6 +9,7 @@ import 'screens/scan_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/add_item_screen.dart';
+import 'services/group_store.dart';
 import 'services/supabase_service.dart';
 import 'services/item_store.dart';
 
@@ -29,6 +30,7 @@ Future<void> main() async {
 
   // 제품 목록 초기 로드
   await ItemStore.instance.initialize();
+  await GroupStore.instance.initialize();
 
   // 환경변수 로드
   await dotenv.load(fileName: ".env");
