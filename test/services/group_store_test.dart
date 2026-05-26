@@ -134,10 +134,7 @@ void main() {
       expect(GroupStore.instance.value.group, isNull);
       expect(GroupStore.instance.value.isLoading, isFalse);
       expect(GroupStore.instance.value.isSaving, isFalse);
-      expect(
-        GroupStore.instance.value.errorMessage,
-        '그룹 정보를 불러오지 못했습니다.',
-      );
+      expect(GroupStore.instance.value.errorMessage, '그룹 정보를 불러오지 못했습니다.');
       expect(gateway.loadDefaultGroupCalls, 1);
     });
 
@@ -196,10 +193,7 @@ BuylogGroupMember _member() {
   );
 }
 
-Map<String, dynamic> _groupRow({
-  String id = 'group-1',
-  required String name,
-}) {
+Map<String, dynamic> _groupRow({String id = 'group-1', required String name}) {
   return <String, dynamic>{
     'id': id,
     'name': name,

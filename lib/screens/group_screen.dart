@@ -22,10 +22,7 @@ class GroupScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '그룹',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
+                Text('그룹', style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 20),
                 if (state.group == null)
                   _EmptyGroupState(errorMessage: state.errorMessage)
@@ -180,10 +177,7 @@ class _GroupCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          Text(
-            '멤버',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('멤버', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
           if (group.members.isEmpty)
             const Text(
@@ -338,7 +332,9 @@ class _CreateGroupDialogState extends State<_CreateGroupDialog> {
           ),
           actions: [
             TextButton(
-              onPressed: state.isSaving ? null : () => Navigator.of(context).pop(),
+              onPressed: state.isSaving
+                  ? null
+                  : () => Navigator.of(context).pop(),
               child: const Text('취소'),
             ),
             FilledButton(

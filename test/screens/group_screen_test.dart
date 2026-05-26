@@ -151,7 +151,9 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
   @override
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
     loadDefaultGroupCalls += 1;
-    return _currentGroup == null ? null : Map<String, dynamic>.from(_currentGroup!);
+    return _currentGroup == null
+        ? null
+        : Map<String, dynamic>.from(_currentGroup!);
   }
 
   @override
@@ -183,7 +185,8 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
     _currentGroup = _groupRow(
       id: groupId,
       name: insertedGroupValues?['name'] as String? ?? '우리 가족',
-      inviteCode: insertedGroupValues?['invite_code'] as String? ?? 'BUY-ABC123',
+      inviteCode:
+          insertedGroupValues?['invite_code'] as String? ?? 'BUY-ABC123',
     );
   }
 }

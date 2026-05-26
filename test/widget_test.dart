@@ -44,10 +44,7 @@ void main() {
 
       await preloadGroupForStartup();
 
-      expect(
-        GroupStore.instance.value.errorMessage,
-        '그룹 정보를 불러오지 못했습니다.',
-      );
+      expect(GroupStore.instance.value.errorMessage, '그룹 정보를 불러오지 못했습니다.');
       await tester.pumpWidget(const BuylogApp());
       await tester.pump();
       expect(find.byType(MainNavigation), findsOneWidget);
