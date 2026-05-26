@@ -27,7 +27,10 @@ class GroupScreen extends StatelessWidget {
                 if (state.group == null)
                   _EmptyGroupState(errorMessage: state.errorMessage)
                 else
-                  _GroupCard(group: state.group!),
+                  _GroupCard(
+                    group: state.group!,
+                    isRefreshingMembers: state.isRefreshingMembers,
+                  ),
               ],
             ),
           );
@@ -119,9 +122,13 @@ class _EmptyGroupState extends StatelessWidget {
 }
 
 class _GroupCard extends StatelessWidget {
-  const _GroupCard({required this.group});
+  const _GroupCard({
+    required this.group,
+    required this.isRefreshingMembers,
+  });
 
   final BuylogGroup group;
+  final bool isRefreshingMembers;
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +184,29 @@ class _GroupCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          Text('멤버', style: Theme.of(context).textTheme.titleMedium),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '멤버 ${group.members.length}명',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              IconButton(
+                tooltip: '멤버 새로고침',
+                onPressed: isRefreshingMembers
+                    ? null
+                    : () => GroupStore.instance.refreshMembers(),
+                icon: isRefreshingMembers
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
           if (group.members.isEmpty)
             const Text(
@@ -235,9 +264,24 @@ class _MemberRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        Text(
-          member.role == GroupRole.owner ? '관리자' : '멤버',
-          style: Theme.of(context).textTheme.bodySmall,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: member.role == GroupRole.owner
+                ? AppColors.primaryLight2
+                : AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: AppColors.border, width: 0.5),
+          ),
+          child: Text(
+            member.role.displayLabel,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: member.role == GroupRole.owner
+                  ? AppColors.primaryDark
+                  : AppColors.textMuted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ],
     );

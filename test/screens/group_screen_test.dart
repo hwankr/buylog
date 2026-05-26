@@ -106,7 +106,39 @@ void main() {
 
     expect(find.text('우리 가족'), findsOneWidget);
     expect(find.text('초대 코드: BUY-ABC123'), findsOneWidget);
-    expect(find.text('사용자'), findsOneWidget);
+    expect(find.text('멤버 2명'), findsOneWidget);
+    expect(find.text('소유자'), findsOneWidget);
+    expect(find.text('멤버'), findsNWidgets(2));
+    expect(find.text('관리자'), findsOneWidget);
+  });
+
+  testWidgets('member refresh button reloads and renders latest members', (
+    WidgetTester tester,
+  ) async {
+    final gateway = _FakeGroupDatabaseGateway()
+      ..loadGroupMembersResult = <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'member-2',
+          'user_id': 'user-2',
+          'role': 'member',
+          'joined_at': '2026-05-26T00:01:00.000Z',
+          'users': <String, dynamic>{
+            'display_name': '새 멤버',
+            'email': 'new@example.com',
+          },
+        },
+      ];
+    SupabaseService.debugGroupDatabaseGateway = gateway;
+    GroupStore.instance.value = GroupState(group: _group());
+
+    await tester.pumpWidget(_wrap());
+    await tester.tap(find.byTooltip('멤버 새로고침'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(gateway.loadGroupMembersCalls, 1);
+    expect(find.text('새 멤버'), findsOneWidget);
+    expect(find.text('멤버 1명'), findsOneWidget);
   });
 }
 
@@ -128,9 +160,16 @@ BuylogGroup _group() {
       BuylogGroupMember(
         id: 'member-1',
         userId: 'user-1',
-        displayName: '사용자',
+        displayName: '소유자',
         role: GroupRole.owner,
         joinedAt: DateTime.parse('2026-05-26T00:00:00.000Z'),
+      ),
+      BuylogGroupMember(
+        id: 'member-2',
+        userId: 'user-2',
+        displayName: '멤버',
+        role: GroupRole.member,
+        joinedAt: DateTime.parse('2026-05-26T00:01:00.000Z'),
       ),
     ],
   );
@@ -139,8 +178,10 @@ BuylogGroup _group() {
 class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
   int createGroupWithOwnerCalls = 0;
+  int loadGroupMembersCalls = 0;
   Map<String, dynamic>? createdGroupValues;
   Object? createGroupWithOwnerError;
+  List<Map<String, dynamic>> loadGroupMembersResult = const [];
   Map<String, dynamic>? _currentGroup;
 
   @override
@@ -174,12 +215,8 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
   Future<List<Map<String, dynamic>>> loadGroupMembers({
     required String groupId,
   }) async {
-    return _currentGroup == null
-        ? const <Map<String, dynamic>>[]
-        : List<Map<String, dynamic>>.from(
-            (_currentGroup!['group_members'] as List<dynamic>)
-                .whereType<Map<String, dynamic>>(),
-          );
+    loadGroupMembersCalls += 1;
+    return loadGroupMembersResult;
   }
 
   Future<void> insertGroupMember(Map<String, dynamic> values) async {}
