@@ -7,13 +7,12 @@ import 'package:buylog/services/supabase_service.dart';
 
 class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
-  Map<String, dynamic>? insertedGroupValues;
-  Map<String, dynamic>? insertedGroupMemberValues;
-  String? updatedDefaultGroupUserId;
-  String? updatedDefaultGroupId;
+  int createGroupWithOwnerCalls = 0;
+  String? createGroupWithOwnerName;
+  String? createGroupWithOwnerInviteCode;
   Map<String, dynamic>? loadDefaultGroupResult;
-  Map<String, dynamic>? insertedGroupResult;
-  Object? updateDefaultGroupError;
+  Map<String, dynamic>? createGroupWithOwnerResult;
+  Object? createGroupWithOwnerError;
 
   @override
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
@@ -22,34 +21,38 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   }
 
   @override
-  Future<Map<String, dynamic>> insertGroup(Map<String, dynamic> values) async {
-    insertedGroupValues = Map<String, dynamic>.from(values);
-    return insertedGroupResult ??
+  Future<Map<String, dynamic>> createGroupWithOwner({
+    required String name,
+    required String inviteCode,
+  }) async {
+    createGroupWithOwnerCalls += 1;
+    createGroupWithOwnerName = name;
+    createGroupWithOwnerInviteCode = inviteCode;
+
+    if (createGroupWithOwnerError != null) {
+      throw createGroupWithOwnerError!;
+    }
+
+    return createGroupWithOwnerResult ??
         <String, dynamic>{
           'id': 'group-1',
-          'name': values['name'],
-          'invite_code': values['invite_code'],
-          'created_by': values['created_by'],
+          'name': name,
+          'invite_code': inviteCode,
+          'created_by': SupabaseService.currentUserId,
           'created_at': '2026-05-26T00:00:00.000Z',
-          'group_members': <Map<String, dynamic>>[],
+          'group_members': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'member-1',
+              'user_id': SupabaseService.currentUserId,
+              'role': 'owner',
+              'joined_at': '2026-05-26T00:00:00.000Z',
+              'users': <String, dynamic>{
+                'display_name': 'Owner',
+                'email': 'owner@example.com',
+              },
+            },
+          ],
         };
-  }
-
-  @override
-  Future<void> insertGroupMember(Map<String, dynamic> values) async {
-    insertedGroupMemberValues = Map<String, dynamic>.from(values);
-  }
-
-  @override
-  Future<void> updateDefaultGroup({
-    required String userId,
-    required String groupId,
-  }) async {
-    if (updateDefaultGroupError != null) {
-      throw updateDefaultGroupError!;
-    }
-    updatedDefaultGroupUserId = userId;
-    updatedDefaultGroupId = groupId;
   }
 }
 
@@ -94,10 +97,10 @@ void main() {
     });
 
     test(
-      'creates a trimmed group, inserts owner membership, and updates default group',
+      'creates a trimmed group through one atomic gateway call',
       () async {
         final gateway = _RecordingGroupDatabaseGateway()
-          ..loadDefaultGroupResult = <String, dynamic>{
+          ..createGroupWithOwnerResult = <String, dynamic>{
             'id': 'group-1',
             'name': 'My Group',
             'invite_code': 'BUY-ABC123',
@@ -120,30 +123,17 @@ void main() {
 
         final group = await SupabaseService.createGroup(name: '  My Group  ');
 
-        expect(gateway.insertedGroupValues?['name'], 'My Group');
+        expect(gateway.createGroupWithOwnerCalls, 1);
+        expect(gateway.createGroupWithOwnerName, 'My Group');
         expect(
-          gateway.insertedGroupValues?['created_by'],
-          SupabaseService.currentUserId,
-        );
-        expect(
-          gateway.insertedGroupValues?['invite_code'] as String,
+          gateway.createGroupWithOwnerInviteCode,
           startsWith('BUY-'),
         );
         expect(
-          (gateway.insertedGroupValues?['invite_code'] as String).length,
+          gateway.createGroupWithOwnerInviteCode?.length,
           10,
         );
-        expect(gateway.insertedGroupMemberValues, <String, dynamic>{
-          'group_id': 'group-1',
-          'user_id': SupabaseService.currentUserId,
-          'role': 'owner',
-        });
-        expect(
-          gateway.updatedDefaultGroupUserId,
-          SupabaseService.currentUserId,
-        );
-        expect(gateway.updatedDefaultGroupId, 'group-1');
-        expect(gateway.loadDefaultGroupCalls, 1);
+        expect(gateway.loadDefaultGroupCalls, 0);
         expect(group.id, 'group-1');
         expect(group.name, 'My Group');
         expect(group.members.single.role.databaseValue, 'owner');
@@ -165,15 +155,13 @@ void main() {
         ),
       );
 
-      expect(gateway.insertedGroupValues, isNull);
-      expect(gateway.insertedGroupMemberValues, isNull);
-      expect(gateway.updatedDefaultGroupUserId, isNull);
+      expect(gateway.createGroupWithOwnerCalls, 0);
       expect(gateway.loadDefaultGroupCalls, 0);
     });
 
-    test('propagates default-group update failures', () async {
+    test('propagates atomic group creation failures', () async {
       final gateway = _RecordingGroupDatabaseGateway()
-        ..updateDefaultGroupError = StateError('default group update failed');
+        ..createGroupWithOwnerError = StateError('atomic create failed');
       SupabaseService.debugGroupDatabaseGateway = gateway;
 
       await expectLater(
@@ -182,27 +170,13 @@ void main() {
           isA<StateError>().having(
             (error) => error.message,
             'message',
-            'default group update failed',
+            'atomic create failed',
           ),
         ),
       );
 
-      expect(gateway.insertedGroupValues?['name'], 'Group Name');
-      expect(gateway.insertedGroupMemberValues, <String, dynamic>{
-        'group_id': 'group-1',
-        'user_id': SupabaseService.currentUserId,
-        'role': 'owner',
-      });
-      expect(
-        gateway.updatedDefaultGroupUserId,
-        isNull,
-        reason: 'failed update should not be reported as successful',
-      );
-      expect(
-        gateway.updatedDefaultGroupId,
-        isNull,
-        reason: 'failed update should not be reported as successful',
-      );
+      expect(gateway.createGroupWithOwnerCalls, 1);
+      expect(gateway.createGroupWithOwnerName, 'Group Name');
       expect(gateway.loadDefaultGroupCalls, 0);
     });
   });

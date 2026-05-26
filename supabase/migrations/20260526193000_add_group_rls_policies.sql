@@ -42,6 +42,41 @@ $$;
 revoke all on function private.is_group_member(uuid, uuid) from public, anon, authenticated;
 revoke all on function private.is_group_owner(uuid, uuid) from public, anon, authenticated;
 
+create or replace function public.create_group_with_owner(group_name text, group_invite_code text)
+returns setof public.groups
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  new_group_id uuid := gen_random_uuid();
+  current_user_id uuid := auth.uid();
+begin
+  if current_user_id is null then
+    raise exception 'Authentication required'
+      using errcode = '42501';
+  end if;
+
+  insert into public.groups (id, name, invite_code, created_by)
+  values (new_group_id, group_name, group_invite_code, current_user_id);
+
+  insert into public.group_members (group_id, user_id, role)
+  values (new_group_id, current_user_id, 'owner');
+
+  update public.users
+  set default_group_id = new_group_id
+  where id = current_user_id;
+
+  return query
+  select g.*
+  from public.groups as g
+  where g.id = new_group_id;
+end;
+$$;
+
+revoke all on function public.create_group_with_owner(text, text) from public, anon, authenticated;
+grant execute on function public.create_group_with_owner(text, text) to authenticated;
+
 alter table public.groups enable row level security;
 alter table public.group_members enable row level security;
 alter table public.users enable row level security;

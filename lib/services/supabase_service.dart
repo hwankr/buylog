@@ -60,28 +60,11 @@ class SupabaseService {
       throw ArgumentError.value(name, 'name', 'Group name is required.');
     }
 
-    final userId = currentUserId;
-    final insertedGroup = await _groupDatabaseGateway.insertGroup({
-      'name': trimmedName,
-      'invite_code': _generateInviteCode(),
-      'created_by': userId,
-    });
-
-    final groupId = insertedGroup['id'] as String;
-
-    await _groupDatabaseGateway.insertGroupMember({
-      'group_id': groupId,
-      'user_id': userId,
-      'role': GroupRole.owner.databaseValue,
-    });
-
-    await _groupDatabaseGateway.updateDefaultGroup(
-      userId: userId,
-      groupId: groupId,
+    final createdGroup = await _groupDatabaseGateway.createGroupWithOwner(
+      name: trimmedName,
+      inviteCode: _generateInviteCode(),
     );
-
-    final reloadedGroup = await loadDefaultGroup();
-    return reloadedGroup ?? BuylogGroup.fromSupabase(insertedGroup);
+    return BuylogGroup.fromSupabase(createdGroup);
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -332,13 +315,9 @@ class SupabaseService {
 abstract class GroupDatabaseGateway {
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId);
 
-  Future<Map<String, dynamic>> insertGroup(Map<String, dynamic> values);
-
-  Future<void> insertGroupMember(Map<String, dynamic> values);
-
-  Future<void> updateDefaultGroup({
-    required String userId,
-    required String groupId,
+  Future<Map<String, dynamic>> createGroupWithOwner({
+    required String name,
+    required String inviteCode,
   });
 }
 
@@ -387,31 +366,18 @@ class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
   }
 
   @override
-  Future<Map<String, dynamic>> insertGroup(Map<String, dynamic> values) async {
+  Future<Map<String, dynamic>> createGroupWithOwner({
+    required String name,
+    required String inviteCode,
+  }) async {
     final row = await _client
-        .from('groups')
-        .insert(values)
+        .rpc(
+          'create_group_with_owner',
+          params: {'group_name': name, 'group_invite_code': inviteCode},
+        )
         .select(_groupProjection)
         .single();
     return Map<String, dynamic>.from(row);
-  }
-
-  @override
-  Future<void> insertGroupMember(Map<String, dynamic> values) async {
-    await _client.from('group_members').insert(values);
-  }
-
-  @override
-  Future<void> updateDefaultGroup({
-    required String userId,
-    required String groupId,
-  }) async {
-    await _client
-        .from('users')
-        .update({'default_group_id': groupId})
-        .eq('id', userId)
-        .select('id, default_group_id')
-        .single();
   }
 }
 
