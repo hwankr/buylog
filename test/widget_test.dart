@@ -67,20 +67,10 @@ class _ThrowingGroupDatabaseGateway implements GroupDatabaseGateway {
   }
 
   @override
-  Future<Map<String, dynamic>> insertGroup(Map<String, dynamic> values) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<void> insertGroupMember(Map<String, dynamic> values) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<void> updateDefaultGroup({
-    required String userId,
-    required String groupId,
+  Future<Map<String, dynamic>> createGroupWithOwner({
+    required String name,
+    required String inviteCode,
   }) {
-    throw UnimplementedError();
+    throw UnsupportedError('createGroupWithOwner is not used in this test');
   }
 }

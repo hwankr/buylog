@@ -148,8 +148,8 @@ void main() {
       expect(GroupStore.instance.value.isLoading, isFalse);
       expect(GroupStore.instance.value.isSaving, isFalse);
       expect(GroupStore.instance.value.errorMessage, isNull);
-      expect(gateway.insertedGroupValues?['name'], 'My Group');
-      expect(gateway.loadDefaultGroupCalls, 1);
+      expect(gateway.createdGroupValues?['name'], 'My Group');
+      expect(gateway.loadDefaultGroupCalls, 0);
     });
 
     test(
@@ -157,7 +157,7 @@ void main() {
       () async {
         gateway.loadDefaultGroupResult = _groupRow(name: 'Existing Group');
         await GroupStore.instance.initialize();
-        gateway.updateDefaultGroupError = StateError('create failed');
+        gateway.createGroupWithOwnerError = StateError('create failed');
 
         await expectLater(
           GroupStore.instance.createGroup('Next Group'),
@@ -219,8 +219,8 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
   Object? loadDefaultGroupError;
   Map<String, dynamic>? loadDefaultGroupResult;
-  Map<String, dynamic>? insertedGroupValues;
-  Object? updateDefaultGroupError;
+  Map<String, dynamic>? createdGroupValues;
+  Object? createGroupWithOwnerError;
 
   @override
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
@@ -232,28 +232,25 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   }
 
   @override
-  Future<Map<String, dynamic>> insertGroup(Map<String, dynamic> values) async {
-    insertedGroupValues = Map<String, dynamic>.from(values);
+  Future<Map<String, dynamic>> createGroupWithOwner({
+    required String name,
+    required String inviteCode,
+  }) async {
+    if (createGroupWithOwnerError != null) {
+      throw createGroupWithOwnerError!;
+    }
+
+    createdGroupValues = <String, dynamic>{
+      'name': name,
+      'invite_code': inviteCode,
+    };
     return <String, dynamic>{
       'id': 'group-1',
-      'name': values['name'],
-      'invite_code': values['invite_code'],
-      'created_by': values['created_by'],
+      'name': name,
+      'invite_code': inviteCode,
+      'created_by': SupabaseService.currentUserId,
       'created_at': '2026-05-26T00:00:00.000Z',
       'group_members': <Map<String, dynamic>>[],
     };
-  }
-
-  @override
-  Future<void> insertGroupMember(Map<String, dynamic> values) async {}
-
-  @override
-  Future<void> updateDefaultGroup({
-    required String userId,
-    required String groupId,
-  }) async {
-    if (updateDefaultGroupError != null) {
-      throw updateDefaultGroupError!;
-    }
   }
 }

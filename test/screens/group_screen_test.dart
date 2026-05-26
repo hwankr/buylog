@@ -57,15 +57,13 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(gateway.insertGroupCalls, 1);
-    expect(gateway.insertGroupMemberCalls, 1);
-    expect(gateway.updateDefaultGroupCalls, 1);
-    expect(gateway.loadDefaultGroupCalls, 1);
-    expect(gateway.insertedGroupValues?['name'], '우리 가족');
+    expect(gateway.createGroupWithOwnerCalls, 1);
+    expect(gateway.loadDefaultGroupCalls, 0);
+    expect(gateway.createdGroupValues?['name'], '우리 가족');
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('우리 가족'), findsOneWidget);
     expect(
-      find.text('초대 코드: ${gateway.insertedGroupValues?['invite_code']}'),
+      find.text('초대 코드: ${gateway.createdGroupValues?['invite_code']}'),
       findsOneWidget,
     );
     expect(find.text('사용자'), findsOneWidget);
@@ -75,7 +73,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final gateway = _FakeGroupDatabaseGateway()
-      ..updateDefaultGroupError = StateError('create failed');
+      ..createGroupWithOwnerError = StateError('create failed');
     SupabaseService.debugGroupDatabaseGateway = gateway;
 
     await tester.pumpWidget(_wrap());
@@ -140,12 +138,9 @@ BuylogGroup _group() {
 
 class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
-  int insertGroupCalls = 0;
-  int insertGroupMemberCalls = 0;
-  int updateDefaultGroupCalls = 0;
-  Map<String, dynamic>? insertedGroupValues;
-  Map<String, dynamic>? insertedGroupMemberValues;
-  Object? updateDefaultGroupError;
+  int createGroupWithOwnerCalls = 0;
+  Map<String, dynamic>? createdGroupValues;
+  Object? createGroupWithOwnerError;
   Map<String, dynamic>? _currentGroup;
 
   @override
@@ -157,38 +152,30 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
   }
 
   @override
-  Future<Map<String, dynamic>> insertGroup(Map<String, dynamic> values) async {
-    insertGroupCalls += 1;
-    insertedGroupValues = Map<String, dynamic>.from(values);
-    return _groupRow(
-      name: values['name'] as String,
-      inviteCode: values['invite_code'] as String,
-    );
+  Future<Map<String, dynamic>> createGroupWithOwner({
+    required String name,
+    required String inviteCode,
+  }) async {
+    createGroupWithOwnerCalls += 1;
+    if (createGroupWithOwnerError != null) {
+      throw createGroupWithOwnerError!;
+    }
+
+    createdGroupValues = <String, dynamic>{
+      'name': name,
+      'invite_code': inviteCode,
+    };
+    final group = _groupRow(name: name, inviteCode: inviteCode);
+    _currentGroup = group;
+    return group;
   }
 
-  @override
-  Future<void> insertGroupMember(Map<String, dynamic> values) async {
-    insertGroupMemberCalls += 1;
-    insertedGroupMemberValues = Map<String, dynamic>.from(values);
-  }
+  Future<void> insertGroupMember(Map<String, dynamic> values) async {}
 
-  @override
   Future<void> updateDefaultGroup({
     required String userId,
     required String groupId,
-  }) async {
-    updateDefaultGroupCalls += 1;
-    if (updateDefaultGroupError != null) {
-      throw updateDefaultGroupError!;
-    }
-
-    _currentGroup = _groupRow(
-      id: groupId,
-      name: insertedGroupValues?['name'] as String? ?? '우리 가족',
-      inviteCode:
-          insertedGroupValues?['invite_code'] as String? ?? 'BUY-ABC123',
-    );
-  }
+  }) async {}
 }
 
 Map<String, dynamic> _groupRow({
