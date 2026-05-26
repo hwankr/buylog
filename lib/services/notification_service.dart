@@ -6,7 +6,8 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
 
   Future<void> initialize() async {
     await FirebaseMessaging.instance.requestPermission();
@@ -14,7 +15,8 @@ class NotificationService {
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
+    const DarwinInitializationSettings iosSettings =
+        DarwinInitializationSettings();
 
     const InitializationSettings initSettings = InitializationSettings(
       android: androidSettings,
@@ -30,16 +32,24 @@ class NotificationService {
   }
 
   Future<void> showInstantNotification(String title, String body) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'buylog_channel_id',
-      '소모품 교체 알림',
-      importance: Importance.max,
-      priority: Priority.high,
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'buylog_channel_id',
+          '소모품 교체 알림',
+          importance: Importance.max,
+          priority: Priority.high,
+        );
+
+    const NotificationDetails details = NotificationDetails(
+      android: androidDetails,
     );
 
-    const NotificationDetails details = NotificationDetails(android: androidDetails);
-
-    await _localNotifications.show(id: 0, title: title, body: body, notificationDetails: details);
+    await _localNotifications.show(
+      id: 0,
+      title: title,
+      body: body,
+      notificationDetails: details,
+    );
   }
 
   Future<void> scheduleAll() async {

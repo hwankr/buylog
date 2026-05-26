@@ -62,7 +62,8 @@ class ConsumableItem {
         .toList();
 
     // AI 예측값 또는 기본값 사용
-    final predictedCycleDays = aiPrediction?['predicted_cycle_days'] as int? ?? cycleDays;
+    final predictedCycleDays =
+        aiPrediction?['predicted_cycle_days'] as int? ?? cycleDays;
 
     // calcDday를 사용하여 실제 남은 일수 계산
     final daysRemaining = calcDday(
