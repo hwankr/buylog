@@ -12,7 +12,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationEnabled = true;
-  late SharedPreferences _prefs;
+  SharedPreferences? _prefs;
 
   @override
   void initState() {
@@ -23,16 +23,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadNotificationPreference() async {
     _prefs = await SharedPreferences.getInstance();
     setState(() {
-      _notificationEnabled = _prefs.getBool('notification_enabled') ?? true;
+      _notificationEnabled = _prefs?.getBool('notification_enabled') ?? true;
     });
   }
 
   Future<void> _toggleNotification(bool value) async {
+    if (_prefs == null) return;
+
     setState(() {
       _notificationEnabled = value;
     });
 
-    await _prefs.setBool('notification_enabled', value);
+    await _prefs!.setBool('notification_enabled', value);
 
     if (value) {
       await NotificationService().scheduleAll();
