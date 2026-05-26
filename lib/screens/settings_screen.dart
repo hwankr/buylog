@@ -22,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadNotificationPreference() async {
     _prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _notificationEnabled = _prefs?.getBool('notification_enabled') ?? true;
     });
