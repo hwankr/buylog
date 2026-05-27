@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/group.dart';
 import '../models/item.dart';
@@ -11,8 +12,12 @@ import '../models/item_scope.dart';
 /// 테이블: product_items / purchases / categories / ai_predictions
 /// Storage: product-images 버킷 (공개)
 class SupabaseService {
-  static const _supabaseUrl = 'https://fervijwxdgkwjtcpzskx.supabase.co';
-  static const _anonKey = 'sb_publishable_FO7WmA_Pu4RsGgsfRJzssQ_f0orCu7w';
+  static const _supabaseUrlFromEnvironment = String.fromEnvironment(
+    'SUPABASE_URL',
+  );
+  static const _anonKeyFromEnvironment = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+  );
   static const _storageBucket = 'product-images';
   static const _groupInviteCodeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -42,8 +47,37 @@ class SupabaseService {
 
   /// Supabase 초기화
   static Future<void> initialize() async {
-    await Supabase.initialize(url: _supabaseUrl, anonKey: _anonKey);
+    await dotenv.load(fileName: '.env', isOptional: true);
+    final supabaseUrl = _resolveConfigValue(
+      compileTimeValue: _supabaseUrlFromEnvironment,
+      dotenvKey: 'SUPABASE_URL',
+    );
+    final anonKey = _resolveConfigValue(
+      compileTimeValue: _anonKeyFromEnvironment,
+      dotenvKey: 'SUPABASE_ANON_KEY',
+    );
+
+    if (supabaseUrl == null || anonKey == null) {
+      throw StateError(
+        'Missing Supabase configuration. Set SUPABASE_URL and SUPABASE_ANON_KEY.',
+      );
+    }
+
+    await Supabase.initialize(url: supabaseUrl, anonKey: anonKey);
     debugPrint('[Supabase] 초기화 완료');
+  }
+
+  static String? _resolveConfigValue({
+    required String compileTimeValue,
+    required String dotenvKey,
+  }) {
+    final value = compileTimeValue.isNotEmpty
+        ? compileTimeValue
+        : dotenv.env[dotenvKey];
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    return value.trim();
   }
 
   @visibleForTesting
