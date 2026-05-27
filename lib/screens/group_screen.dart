@@ -50,7 +50,17 @@ class _GroupScreenState extends State<GroupScreen> {
 
     final selectedScope = GroupStore.instance.value.selectedScope;
     if (selectedScope.storageKey != selectedGroupScope.storageKey) {
-      GroupStore.instance.selectScope(selectedGroupScope);
+      if (_itemsStore.value.scope.storageKey != selectedGroupScope.storageKey) {
+        _itemsStore.load(selectedGroupScope);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final currentState = GroupStore.instance.value;
+        if (currentState.selectedScope.storageKey !=
+            selectedGroupScope.storageKey) {
+          GroupStore.instance.selectScope(selectedGroupScope);
+        }
+      });
       return;
     }
 
