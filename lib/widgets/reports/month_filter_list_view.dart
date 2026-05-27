@@ -4,7 +4,7 @@ import '../../models/item.dart';
 import '../../services/report_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/price_format.dart';
-import 'category_pie_chart.dart';
+import 'report_palette.dart';
 
 class MonthFilterListView extends StatelessWidget {
   const MonthFilterListView({
