@@ -16,6 +16,7 @@ ReportService _buildService() {
       daysRemaining: 0,
       cycleDays: 30,
       progress: 0.5,
+      createdAt: DateTime(2026, 3, 1),
       purchaseHistory: [
         PurchaseRecord(date: DateTime(2026, 3, 1), price: 12500, store: '이마트'),
       ],
@@ -29,6 +30,7 @@ ReportService _buildService() {
       daysRemaining: 0,
       cycleDays: 30,
       progress: 0.5,
+      createdAt: DateTime(2026, 2, 18),
       purchaseHistory: [
         PurchaseRecord(date: DateTime(2026, 3, 20), price: 4500, store: '이마트'),
         PurchaseRecord(date: DateTime(2026, 2, 18), price: 4200, store: '쿠팡'),
