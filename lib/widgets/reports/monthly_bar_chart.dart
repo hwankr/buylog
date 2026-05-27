@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../../services/report_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/price_format.dart';
+import 'report_palette.dart';
 
 /// 월별 지출 막대 차트.
 class MonthlyBarChart extends StatelessWidget {
@@ -18,6 +20,14 @@ class MonthlyBarChart extends StatelessWidget {
   final void Function(DateTime month)? onMonthTap;
   final DateTime? selectedMonth;
   final bool highlightLatest;
+
+  double _barWidthFor(int count) => count > 8 ? 18 : 24;
+
+  String _axisPriceLabel(double value) {
+    if (value <= 0) return '';
+    if (value >= 10000) return '${(value / 10000).round()}만';
+    return value.round().toString();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,9 +46,9 @@ class MonthlyBarChart extends StatelessWidget {
           gridData: FlGridData(
             show: true,
             drawVerticalLine: false,
-            horizontalInterval: 50000,
+            horizontalInterval: computedMaxY / 4,
             getDrawingHorizontalLine: (value) =>
-                FlLine(color: AppColors.border, strokeWidth: 0.5),
+                const FlLine(color: ReportPalette.chartGrid, strokeWidth: 0.5),
           ),
           borderData: FlBorderData(show: false),
           titlesData: FlTitlesData(
@@ -48,22 +58,50 @@ class MonthlyBarChart extends StatelessWidget {
             rightTitles: const AxisTitles(
               sideTitles: SideTitles(showTitles: false),
             ),
-            leftTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 40,
+                interval: computedMaxY / 2,
+                getTitlesWidget: (value, meta) {
+                  final label = _axisPriceLabel(value);
+                  if (label.isEmpty) return const SizedBox.shrink();
+                  return Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  );
+                },
+              ),
             ),
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
+                reservedSize: 30,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
                   if (index >= 0 && index < data.length) {
+                    final isLatest = index == data.length - 1;
+                    final isSelected =
+                        selectedMonth != null &&
+                        data[index].month == selectedMonth;
+                    final highlighted =
+                        isSelected || (highlightLatest && isLatest);
                     return Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         '${data[index].month.month}월',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: AppColors.textMuted,
+                          fontWeight: highlighted
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                          color: highlighted
+                              ? AppColors.primaryDark
+                              : AppColors.textSecondary,
                         ),
                       ),
                     );
@@ -75,6 +113,28 @@ class MonthlyBarChart extends StatelessWidget {
           ),
           barTouchData: BarTouchData(
             enabled: true,
+            touchTooltipData: BarTouchTooltipData(
+              getTooltipColor: (_) => AppColors.text,
+              tooltipBorderRadius: BorderRadius.circular(8),
+              tooltipPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 8,
+              ),
+              fitInsideHorizontally: true,
+              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                final month = data[group.x.toInt()].month;
+                final amount = data[group.x.toInt()].totalAmount;
+                return BarTooltipItem(
+                  '${month.month}월\n${formatPrice(amount)}',
+                  const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                  ),
+                );
+              },
+            ),
             touchCallback: (event, response) {
               // fl_chart 1.2.0 은 desktop/web 에서 한 번의 탭에 FlTapDownEvent +
               // FlTapUpEvent 둘 다 emit 한다. 본 차트는 CustomScrollView 안에
@@ -98,16 +158,17 @@ class MonthlyBarChart extends StatelessWidget {
             final isLatest = entry.key == data.length - 1;
             final isSelected =
                 selectedMonth != null && entry.value.month == selectedMonth;
-            final highlighted = isSelected || (highlightLatest && isLatest);
             return BarChartGroupData(
               x: entry.key,
               barRods: [
                 BarChartRodData(
                   toY: entry.value.totalAmount.toDouble(),
-                  width: 28,
-                  color: highlighted
-                      ? AppColors.primary
-                      : AppColors.primary.withValues(alpha: 0.3),
+                  width: _barWidthFor(data.length),
+                  color: ReportPalette.barColor(
+                    isSelected: isSelected,
+                    isLatest: highlightLatest && isLatest,
+                    hasValue: entry.value.totalAmount > 0,
+                  ),
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(6),
                     topRight: Radius.circular(6),

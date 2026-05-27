@@ -8,7 +8,7 @@ Widget _wrap() {
 }
 
 Future<void> _pumpReportsScreen(WidgetTester tester) async {
-  await tester.binding.setSurfaceSize(const Size(800, 2200));
+  await tester.binding.setSurfaceSize(const Size(800, 3000));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(_wrap());
 }
@@ -34,6 +34,8 @@ void main() {
       expect(find.text('연간 지출 현황'), findsOneWidget);
       expect(find.text('$currentYear년'), findsWidgets);
       expect(find.text('연간 월별 지출'), findsOneWidget);
+      expect(find.text('가격 변동'), findsOneWidget);
+      expect(find.text('연간 카테고리 상세'), findsOneWidget);
       expect(find.text('월별 지출 추이'), findsNothing);
     });
   });

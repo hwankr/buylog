@@ -429,4 +429,338 @@ void main() {
       expect(mar.first.amount, 2000);
     });
   });
+
+  group('ReportService period summaries', () {
+    test('monthlySummary compares selected month with previous month', () {
+      final service = ReportService.fromItems(<ConsumableItem>[
+        ConsumableItem(
+          id: 'a',
+          name: '필터',
+          brand: 'x',
+          category: '가전/필터',
+          icon: Icons.circle,
+          daysRemaining: 10,
+          cycleDays: 30,
+          progress: 0.5,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 4, 2),
+              price: 30000,
+              store: '쿠팡',
+            ),
+            PurchaseRecord(
+              date: DateTime(2026, 3, 2),
+              price: 20000,
+              store: '쿠팡',
+            ),
+          ],
+        ),
+        ConsumableItem(
+          id: 'b',
+          name: '세제',
+          brand: 'x',
+          category: '주방/세제',
+          icon: Icons.circle,
+          daysRemaining: 20,
+          cycleDays: 30,
+          progress: 0.4,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 4, 8),
+              price: 5000,
+              store: '이마트',
+            ),
+          ],
+        ),
+      ]);
+
+      final summary = service.monthlySummary(DateTime(2026, 4, 1));
+
+      expect(summary.totalAmount, 35000);
+      expect(summary.previousAmount, 20000);
+      expect(summary.deltaAmount, 15000);
+      expect(summary.purchaseCount, 2);
+      expect(summary.topCategory, '가전/필터');
+      expect(summary.topCategoryAmount, 30000);
+    });
+
+    test('yearlySummary compares selected year with previous year', () {
+      final service = ReportService.fromItems(<ConsumableItem>[
+        ConsumableItem(
+          id: 'a',
+          name: '필터',
+          brand: 'x',
+          category: '가전/필터',
+          icon: Icons.circle,
+          daysRemaining: 10,
+          cycleDays: 30,
+          progress: 0.5,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 2, 2),
+              price: 30000,
+              store: '쿠팡',
+            ),
+            PurchaseRecord(
+              date: DateTime(2025, 2, 2),
+              price: 12000,
+              store: '쿠팡',
+            ),
+          ],
+        ),
+      ]);
+
+      final summary = service.yearlySummary(2026);
+
+      expect(summary.totalAmount, 30000);
+      expect(summary.previousAmount, 12000);
+      expect(summary.deltaAmount, 18000);
+      expect(summary.purchaseCount, 1);
+      expect(summary.topCategory, '가전/필터');
+    });
+  });
+
+  group('ReportService refillForecast', () {
+    test('groups upcoming items into 30, 60, and 90 day forecast windows', () {
+      final service = ReportService.fromItems(<ConsumableItem>[
+        ConsumableItem(
+          id: 'soon',
+          name: '화장지',
+          brand: '코디',
+          category: '욕실/위생',
+          icon: Icons.circle,
+          daysRemaining: 12,
+          cycleDays: 30,
+          progress: 0.6,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 4, 1),
+              price: 15000,
+              store: '쿠팡',
+            ),
+          ],
+        ),
+        ConsumableItem(
+          id: 'later',
+          name: '필터',
+          brand: '코웨이',
+          category: '가전/필터',
+          icon: Icons.circle,
+          daysRemaining: 44,
+          cycleDays: 90,
+          progress: 0.5,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 2, 1),
+              price: 35000,
+              store: '코웨이몰',
+            ),
+          ],
+        ),
+        ConsumableItem(
+          id: 'far',
+          name: '샴푸',
+          brand: '케라시스',
+          category: '헤어/바디',
+          icon: Icons.circle,
+          daysRemaining: 110,
+          cycleDays: 120,
+          progress: 0.1,
+          purchaseHistory: [
+            PurchaseRecord(
+              date: DateTime(2026, 1, 1),
+              price: 9000,
+              store: '올리브영',
+            ),
+          ],
+        ),
+      ]);
+
+      final forecast = service.refillForecast();
+
+      expect(forecast.next30DaysAmount, 15000);
+      expect(forecast.next60DaysAmount, 50000);
+      expect(forecast.next90DaysAmount, 50000);
+      expect(forecast.items.map((e) => e.item.id), ['soon', 'later']);
+    });
+  });
+
+  group('ReportService priceMovements', () {
+    test(
+      'returns items with recent price changes sorted by absolute delta',
+      () {
+        final service = ReportService.fromItems(<ConsumableItem>[
+          ConsumableItem(
+            id: 'up',
+            name: '주방 세제',
+            brand: '자연퐁',
+            category: '주방/세제',
+            icon: Icons.circle,
+            daysRemaining: 10,
+            cycleDays: 30,
+            progress: 0.6,
+            purchaseHistory: [
+              PurchaseRecord(
+                date: DateTime(2026, 4, 1),
+                price: 6000,
+                store: '쿠팡',
+              ),
+              PurchaseRecord(
+                date: DateTime(2026, 3, 1),
+                price: 4500,
+                store: '이마트',
+              ),
+            ],
+          ),
+          ConsumableItem(
+            id: 'same',
+            name: '샴푸',
+            brand: '케라시스',
+            category: '헤어/바디',
+            icon: Icons.circle,
+            daysRemaining: 20,
+            cycleDays: 60,
+            progress: 0.4,
+            purchaseHistory: [
+              PurchaseRecord(
+                date: DateTime(2026, 4, 1),
+                price: 9000,
+                store: '올리브영',
+              ),
+              PurchaseRecord(
+                date: DateTime(2026, 3, 1),
+                price: 9000,
+                store: '쿠팡',
+              ),
+            ],
+          ),
+        ]);
+
+        final movements = service.priceMovements(limit: 3);
+
+        expect(movements.length, 1);
+        expect(movements.first.item.id, 'up');
+        expect(movements.first.currentPrice, 6000);
+        expect(movements.first.previousPrice, 4500);
+        expect(movements.first.deltaAmount, 1500);
+        expect(movements.first.deltaRatio, closeTo(0.333, 0.001));
+      },
+    );
+  });
+
+  group('ReportService smartInsights', () {
+    test(
+      'creates deterministic insights from summary, forecast, and price movement',
+      () {
+        final service = ReportService.fromItems(<ConsumableItem>[
+          ConsumableItem(
+            id: 'filter',
+            name: '정수기 필터',
+            brand: '코웨이',
+            category: '가전/필터',
+            icon: Icons.circle,
+            daysRemaining: 7,
+            cycleDays: 90,
+            progress: 0.9,
+            purchaseHistory: [
+              PurchaseRecord(
+                date: DateTime(2026, 4, 1),
+                price: 35000,
+                store: '코웨이몰',
+              ),
+              PurchaseRecord(
+                date: DateTime(2026, 3, 1),
+                price: 30000,
+                store: '쿠팡',
+              ),
+            ],
+          ),
+        ]);
+
+        final insights = service.smartInsights(month: DateTime(2026, 4, 1));
+
+        expect(insights, isNotEmpty);
+        expect(insights.first.title, isNotEmpty);
+        expect(insights.map((e) => e.kind), contains(ReportInsightKind.refill));
+      },
+    );
+  });
+
+  group('ReportService category comparisons', () {
+    test(
+      'categoryComparisonForMonth compares selected month to previous month',
+      () {
+        final service = ReportService.fromItems(<ConsumableItem>[
+          ConsumableItem(
+            id: 'filter',
+            name: '정수기 필터',
+            brand: '코웨이',
+            category: '가전/필터',
+            icon: Icons.circle,
+            daysRemaining: 7,
+            cycleDays: 90,
+            progress: 0.9,
+            purchaseHistory: [
+              PurchaseRecord(
+                date: DateTime(2026, 4, 1),
+                price: 30000,
+                store: '코웨이몰',
+              ),
+              PurchaseRecord(
+                date: DateTime(2026, 3, 1),
+                price: 10000,
+                store: '쿠팡',
+              ),
+            ],
+          ),
+        ]);
+
+        final rows = service.categoryComparisonForMonth(DateTime(2026, 4, 1));
+
+        expect(rows.first.category, '가전/필터');
+        expect(rows.first.amount, 30000);
+        expect(rows.first.previousAmount, 10000);
+        expect(rows.first.deltaAmount, 20000);
+        expect(rows.first.purchaseCount, 1);
+      },
+    );
+
+    test(
+      'categoryComparisonForYear compares selected year to previous year',
+      () {
+        final service = ReportService.fromItems(<ConsumableItem>[
+          ConsumableItem(
+            id: 'filter',
+            name: '정수기 필터',
+            brand: '코웨이',
+            category: '가전/필터',
+            icon: Icons.circle,
+            daysRemaining: 7,
+            cycleDays: 90,
+            progress: 0.9,
+            purchaseHistory: [
+              PurchaseRecord(
+                date: DateTime(2026, 4, 1),
+                price: 30000,
+                store: '코웨이몰',
+              ),
+              PurchaseRecord(
+                date: DateTime(2025, 4, 1),
+                price: 12000,
+                store: '쿠팡',
+              ),
+            ],
+          ),
+        ]);
+
+        final rows = service.categoryComparisonForYear(2026);
+
+        expect(rows.first.category, '가전/필터');
+        expect(rows.first.amount, 30000);
+        expect(rows.first.previousAmount, 12000);
+        expect(rows.first.deltaAmount, 18000);
+        expect(rows.first.purchaseCount, 1);
+      },
+    );
+  });
 }
