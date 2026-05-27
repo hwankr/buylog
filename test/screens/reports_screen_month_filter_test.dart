@@ -52,6 +52,17 @@ void main() {
       expect(find.textContaining('상세 내역'), findsNothing);
     });
 
+    testWidgets('지출 추이 섹션이 카테고리 구성보다 먼저 보인다', (tester) async {
+      await _pumpReportsScreen(tester);
+
+      final trendTop = tester.getTopLeft(find.text('월별 지출 추이')).dy;
+      final categoryTop = tester
+          .getTopLeft(find.textContaining('월 카테고리 구성'))
+          .dy;
+
+      expect(trendTop, lessThan(categoryTop));
+    });
+
     testWidgets('첫 탭 → 해당 월 헤더 표시', (tester) async {
       await _pumpReportsScreen(tester);
       final target = _firstNonZeroMonth(tester);

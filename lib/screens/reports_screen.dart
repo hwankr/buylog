@@ -192,15 +192,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               child: _ReportSectionCard(
-                title: pieTitle,
-                child: CategoryPieChart(data: breakdown),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: _ReportSectionCard(
                 title: chartTitle,
                 child: MonthlyBarChart(
                   data: chartData,
@@ -208,6 +199,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   onMonthTap: _onMonthTap,
                   highlightLatest: !isYearly,
                 ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: _ReportSectionCard(
+                title: pieTitle,
+                child: CategoryPieChart(data: breakdown),
               ),
             ),
           ),
