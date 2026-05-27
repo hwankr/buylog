@@ -1,6 +1,14 @@
 import 'package:flutter/foundation.dart';
 import '../models/item.dart';
+import '../models/item_scope.dart';
 import 'supabase_service.dart';
+
+class ItemSaveEvent {
+  const ItemSaveEvent({required this.scope, required this.serial});
+
+  final ItemScope scope;
+  final int serial;
+}
 
 /// 제품 상태 저장소
 ///
@@ -12,6 +20,11 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
   ItemStore._() : super([]);
 
   bool _initialized = false;
+  int _saveEventSerial = 0;
+  final ValueNotifier<ItemSaveEvent?> _lastSaveEvent =
+      ValueNotifier<ItemSaveEvent?>(null);
+
+  ValueListenable<ItemSaveEvent?> get lastSaveEvent => _lastSaveEvent;
 
   /// Supabase에서 초기 제품 목록을 불러옵니다.
   Future<void> initialize() async {
@@ -24,11 +37,21 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
   /// 새 제품 추가 — 로컬 즉시 반영 후 Supabase 동기화. 실패 시 롤백.
   ///
   /// ConsumableItem은 모든 필드가 final인 불변 객체이므로, 스냅샷을 얕은 복사(List.unmodifiable)로 저장해도 안전합니다.
-  Future<void> add(ConsumableItem item) async {
+  Future<void> add(
+    ConsumableItem item, {
+    ItemScope scope = const ItemScope.personal(),
+  }) async {
+    if (scope.isGroup) {
+      await SupabaseService.saveItem(item, scope: scope);
+      _notifySaved(scope);
+      return;
+    }
+
     final previous = List<ConsumableItem>.unmodifiable(value);
     value = [...value, item];
     try {
-      await SupabaseService.saveItem(item);
+      await SupabaseService.saveItem(item, scope: scope);
+      _notifySaved(scope);
     } catch (e) {
       value = List.of(previous);
       rethrow;
@@ -36,13 +59,23 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
   }
 
   /// 기존 제품 수정 — 로컬 즉시 반영 후 Supabase 동기화. 실패 시 롤백.
-  Future<void> update(ConsumableItem updated) async {
+  Future<void> update(
+    ConsumableItem updated, {
+    ItemScope scope = const ItemScope.personal(),
+  }) async {
+    if (scope.isGroup) {
+      await SupabaseService.saveItem(updated, scope: scope);
+      _notifySaved(scope);
+      return;
+    }
+
     final previous = List<ConsumableItem>.unmodifiable(value);
     value = value
         .map((item) => item.id == updated.id ? updated : item)
         .toList();
     try {
-      await SupabaseService.saveItem(updated);
+      await SupabaseService.saveItem(updated, scope: scope);
+      _notifySaved(scope);
     } catch (e) {
       value = List.of(previous);
       rethrow;
@@ -65,5 +98,30 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
   ConsumableItem? findById(String id) {
     final matches = value.where((item) => item.id == id);
     return matches.isEmpty ? null : matches.first;
+  }
+
+  ConsumableItem? findDuplicateByName(
+    String name, {
+    ItemScope scope = const ItemScope.personal(),
+  }) {
+    final normalized = name.trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+
+    final matches = value.where((item) {
+      final sameName = item.name.trim().toLowerCase() == normalized;
+      if (!sameName) return false;
+      if (scope.isPersonal) return item.groupId == null;
+      return item.groupId == scope.id;
+    });
+
+    return matches.isEmpty ? null : matches.first;
+  }
+
+  void _notifySaved(ItemScope scope) {
+    _saveEventSerial += 1;
+    _lastSaveEvent.value = ItemSaveEvent(
+      scope: scope,
+      serial: _saveEventSerial,
+    );
   }
 }

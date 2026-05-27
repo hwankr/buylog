@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/item.dart';
+import '../models/item_scope.dart';
 import '../services/ai/category_defaults.dart';
 import '../services/supabase_service.dart';
 import '../services/item_store.dart';
@@ -33,12 +34,14 @@ class AddItemScreen extends StatefulWidget {
   final OcrPrefillData? prefillData;
   final ConsumableItem? editItem;
   final bool isOcrReview;
+  final ItemScope? targetScope;
 
   const AddItemScreen({
     super.key,
     this.prefillData,
     this.editItem,
     this.isOcrReview = false,
+    this.targetScope,
   });
 
   @override
@@ -65,6 +68,18 @@ class _AddItemScreenState extends State<AddItemScreen> {
       _imageBytes != null || (_isEditing && widget.editItem!.imageUrl != null);
 
   bool get _isEditing => widget.editItem != null;
+
+  ItemScope get _effectiveScope {
+    final explicit = widget.targetScope;
+    if (explicit != null) return explicit;
+
+    final editGroupId = widget.editItem?.groupId;
+    if (editGroupId != null && editGroupId.isNotEmpty) {
+      return ItemScope.group(id: editGroupId, label: '그룹');
+    }
+
+    return const ItemScope.personal();
+  }
 
   @override
   void initState() {
@@ -260,13 +275,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
       // 신규 등록 시 동일 이름 제품이 있으면 병합 여부 확인
       if (!_isEditing) {
-        final nameToCheck = _nameCtrl.text.trim().toLowerCase();
-        final duplicate = ItemStore.instance.value
-            .cast<ConsumableItem?>()
-            .firstWhere(
-              (i) => i!.name.trim().toLowerCase() == nameToCheck,
-              orElse: () => null,
-            );
+        final duplicate = ItemStore.instance.findDuplicateByName(
+          _nameCtrl.text,
+          scope: _effectiveScope,
+        );
 
         if (duplicate != null && mounted) {
           final shouldMerge = await showDialog<bool>(
@@ -317,9 +329,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
               purchaseHistory: [...duplicate.purchaseHistory, ...newPurchases],
               createdAt: duplicate.createdAt,
             );
-            await ItemStore.instance.update(merged);
+            await ItemStore.instance.update(merged, scope: _effectiveScope);
             if (mounted) {
-              Navigator.pop(context);
+              Navigator.pop(context, true);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('${duplicate.name}에 구매 이력이 추가되었습니다!'),
@@ -351,13 +363,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
       // Supabase 저장 + 인메모리 스토어 반영
       if (_isEditing) {
-        await ItemStore.instance.update(item);
+        await ItemStore.instance.update(item, scope: _effectiveScope);
       } else {
-        await ItemStore.instance.add(item);
+        await ItemStore.instance.add(item, scope: _effectiveScope);
       }
 
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

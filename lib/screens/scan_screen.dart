@@ -1,28 +1,38 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../models/item_scope.dart';
+import '../services/ocr_service.dart';
 import '../theme/app_theme.dart';
 import 'add_item_screen.dart';
 
+// Step 2: 카메라/앨범 선택 → Step 3: API 호출 → Step 4: 파싱 결과 표시
+enum ScanState { idle, preview, processing, result }
+
 class ScanScreen extends StatefulWidget {
-  const ScanScreen({super.key});
+  const ScanScreen({super.key, this.targetScope = const ItemScope.personal()});
+
+  final ItemScope targetScope;
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
 }
 
-enum ScanState { camera, processing, result }
-
 class _ScanScreenState extends State<ScanScreen>
     with SingleTickerProviderStateMixin {
-  ScanState _state = ScanState.camera;
+  ScanState _state = ScanState.idle;
   late AnimationController _pulseController;
 
-  // OCR 결과 상태 (스캔 완료 후 편집 가능)
-  final TextEditingController _storeCtrl = TextEditingController(
-    text: '이마트 성수점',
-  );
-  DateTime _scanDate = DateTime(2026, 4, 8);
+  // 선택된 이미지
+  Uint8List? _imageBytes;
+
+  // OCR 결과 편집용 컨트롤러 (Step 5)
+  final TextEditingController _storeCtrl = TextEditingController();
+  DateTime _scanDate = DateTime.now();
   final List<_OcrItemEntry> _ocrItems = [];
   bool _isSaving = false;
+
+  // 오류 메시지
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -31,12 +41,6 @@ class _ScanScreenState extends State<ScanScreen>
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
-
-    _ocrItems.addAll([
-      _OcrItemEntry('정수기 필터 (코웨이)', 35000),
-      _OcrItemEntry('주방세제 (퐁퐁)', 4500),
-      _OcrItemEntry('세탁세제 (피죤)', 15900),
-    ]);
   }
 
   @override
@@ -49,15 +53,129 @@ class _ScanScreenState extends State<ScanScreen>
     super.dispose();
   }
 
-  void _startScan() {
-    setState(() => _state = ScanState.processing);
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _state = ScanState.result);
+  // ────────────────────────────────────────────────────────────────────────────
+  // Step 2: 이미지 선택
+  // ────────────────────────────────────────────────────────────────────────────
+
+  Future<void> _pickFromGallery() async {
+    final bytes = await OcrService.pickFromGallery();
+    if (bytes != null) _onImageSelected(bytes);
+  }
+
+  Future<void> _pickFromCamera() async {
+    final bytes = await OcrService.pickFromCamera();
+    if (bytes != null) _onImageSelected(bytes);
+  }
+
+  void _onImageSelected(Uint8List bytes) {
+    setState(() {
+      _imageBytes = bytes;
+      _state = ScanState.preview;
+      _errorMessage = null;
     });
   }
 
-  void _rescan() {
-    setState(() => _state = ScanState.camera);
+  // ────────────────────────────────────────────────────────────────────────────
+  // Step 3 & 4: Vision API 호출 + Regex 파싱
+  // ────────────────────────────────────────────────────────────────────────────
+
+  Future<void> _startOcr() async {
+    if (_imageBytes == null) return;
+    setState(() {
+      _state = ScanState.processing;
+      _errorMessage = null;
+    });
+
+    // Gemini 멀티모달 우선 (이미지 → OCR + 파싱 단일 호출)
+    // 실패 시 Vision API + Regex fallback
+    OcrResult? result = await OcrService.analyzeImage(_imageBytes!);
+
+    if (result == null) {
+      final rawText = await OcrService.extractText(_imageBytes!);
+      if (rawText == null || rawText.trim().isEmpty) {
+        setState(() {
+          _state = ScanState.preview;
+          _errorMessage = 'OCR 인식에 실패했습니다. API 키를 확인하거나 다른 이미지를 선택해주세요.';
+        });
+        return;
+      }
+      result = await OcrService.parseReceiptText(rawText);
+    }
+
+    // Step 5: 추출된 데이터를 편집 컨트롤러에 매핑
+    _storeCtrl.text = result.storeName;
+    _scanDate = result.date ?? DateTime.now();
+
+    for (final item in _ocrItems) {
+      item.dispose();
+    }
+    _ocrItems.clear();
+
+    if (result.items.isNotEmpty) {
+      for (final item in result.items) {
+        _ocrItems.add(_OcrItemEntry(item.name, item.price));
+      }
+    } else {
+      // 상품을 찾지 못하면 빈 항목 1개 제공
+      _ocrItems.add(_OcrItemEntry('', 0));
+    }
+
+    setState(() {
+      _state = ScanState.result;
+      _errorMessage = result!.items.isEmpty
+          ? '상품을 자동 인식하지 못했습니다. 직접 입력해주세요.'
+          : null;
+    });
+  }
+
+  void _resetToIdle() {
+    for (final item in _ocrItems) {
+      item.dispose();
+    }
+    _ocrItems.clear();
+    setState(() {
+      _imageBytes = null;
+      _state = ScanState.idle;
+      _errorMessage = null;
+      _storeCtrl.clear();
+      _scanDate = DateTime.now();
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Step 5: 결과 → AddItemScreen 순차 이동
+  // ────────────────────────────────────────────────────────────────────────────
+
+  Future<void> _confirmAndSave() async {
+    setState(() => _isSaving = true);
+    try {
+      for (final ocrItem in _ocrItems) {
+        final priceStr = ocrItem.priceCtrl.text.replaceAll(
+          RegExp(r'[^0-9]'),
+          '',
+        );
+        final price = int.tryParse(priceStr);
+        if (!mounted) break;
+        await Navigator.push<void>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AddItemScreen(
+              targetScope: widget.targetScope,
+              prefillData: OcrPrefillData(
+                productName: ocrItem.nameCtrl.text.trim(),
+                price: price,
+                storeName: _storeCtrl.text.trim(),
+                purchaseDate: _scanDate,
+              ),
+              isOcrReview: true,
+            ),
+          ),
+        );
+      }
+      if (mounted) _resetToIdle();
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   Future<void> _pickScanDate() async {
@@ -80,50 +198,25 @@ class _ScanScreenState extends State<ScanScreen>
     if (picked != null) setState(() => _scanDate = picked);
   }
 
-  // 각 OCR 아이템을 AddItemScreen으로 순차 이동하여 저장
-  Future<void> _confirmAndSave() async {
-    setState(() => _isSaving = true);
-    try {
-      for (final ocrItem in _ocrItems) {
-        final priceText = ocrItem.priceCtrl.text.replaceAll(
-          RegExp(r'[^0-9]'),
-          '',
-        );
-        final price = int.tryParse(priceText);
-        if (!mounted) break;
-        await Navigator.push<void>(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AddItemScreen(
-              prefillData: OcrPrefillData(
-                productName: ocrItem.nameCtrl.text.trim(),
-                price: price,
-                storeName: _storeCtrl.text.trim(),
-                purchaseDate: _scanDate,
-              ),
-              isOcrReview: true,
-            ),
-          ),
-        );
-      }
-      if (mounted) setState(() => _state = ScanState.camera);
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
+  // ────────────────────────────────────────────────────────────────────────────
+  // Build
+  // ────────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: switch (_state) {
-        ScanState.camera => _buildCameraView(),
+        ScanState.idle => _buildIdle(),
+        ScanState.preview => _buildPreview(),
         ScanState.processing => _buildProcessing(),
         ScanState.result => _buildResult(),
       },
     );
   }
 
-  Widget _buildCameraView() {
+  // ── idle: 카메라 / 앨범 선택 화면 ──────────────────────────────────────────
+
+  Widget _buildIdle() {
     return Column(
       children: [
         Padding(
@@ -135,75 +228,59 @@ class _ScanScreenState extends State<ScanScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          '영수증을 프레임 안에 맞춰주세요',
+          '영수증 사진을 찍거나 앨범에서 선택하세요',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Icon(
-                      Icons.receipt_long_outlined,
-                      size: 80,
-                      color: Colors.white.withValues(alpha: 0.15),
-                    ),
-                  ),
-                  Positioned(
-                    top: 40,
-                    left: 30,
-                    child: _cornerGuide(true, true),
-                  ),
-                  Positioned(
-                    top: 40,
-                    right: 30,
-                    child: _cornerGuide(true, false),
-                  ),
-                  Positioned(
-                    bottom: 40,
-                    left: 30,
-                    child: _cornerGuide(false, true),
-                  ),
-                  Positioned(
-                    bottom: 40,
-                    right: 30,
-                    child: _cornerGuide(false, false),
-                  ),
-                  const Center(
-                    child: Text(
-                      '카메라 미리보기',
-                      style: TextStyle(color: Colors.white54, fontSize: 14),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _startScan,
-              icon: const Icon(Icons.document_scanner_outlined, size: 20),
-              label: const Text('스캔하기', style: TextStyle(fontSize: 16)),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // 카메라 버튼 (웹에서는 브라우저 카메라 사용)
+                _sourceButton(
+                  icon: Icons.camera_alt_outlined,
+                  label: '카메라로 촬영',
+                  subtitle: '카메라를 열어 영수증을 촬영합니다',
+                  onTap: _pickFromCamera,
                 ),
-              ),
+                const SizedBox(height: 16),
+                _sourceButton(
+                  icon: Icons.photo_library_outlined,
+                  label: '앨범에서 선택',
+                  subtitle: '갤러리에서 영수증 사진을 선택합니다',
+                  onTap: _pickFromGallery,
+                ),
+                const SizedBox(height: 32),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight2,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primaryLight),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Google Cloud Vision API로 제품명·날짜·가격을 자동 추출합니다.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.primaryDark,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -211,15 +288,172 @@ class _ScanScreenState extends State<ScanScreen>
     );
   }
 
-  Widget _cornerGuide(bool isTop, bool isLeft) {
-    return SizedBox(
-      width: 30,
-      height: 30,
-      child: CustomPaint(
-        painter: _CornerPainter(isTop: isTop, isLeft: isLeft),
+  Widget _sourceButton({
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight2,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 26),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            const Icon(Icons.chevron_right, color: AppColors.textMuted),
+          ],
+        ),
       ),
     );
   }
+
+  // ── preview: 선택된 이미지 미리보기 + 분석 시작 ────────────────────────────
+
+  Widget _buildPreview() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                onPressed: _resetToIdle,
+              ),
+              Text('이미지 확인', style: Theme.of(context).textTheme.headlineMedium),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.memory(
+                _imageBytes!,
+                fit: BoxFit.contain,
+                width: double.infinity,
+              ),
+            ),
+          ),
+        ),
+        if (_errorMessage != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.danger.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.danger.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 16,
+                    color: AppColors.danger,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.danger,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _resetToIdle,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('다시 선택'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton.icon(
+                  onPressed: _startOcr,
+                  icon: const Icon(Icons.document_scanner_outlined, size: 18),
+                  label: const Text('OCR 분석 시작'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── processing: 로딩 애니메이션 ───────────────────────────────────────────
 
   Widget _buildProcessing() {
     return Center(
@@ -265,13 +499,16 @@ class _ScanScreenState extends State<ScanScreen>
           ),
           const SizedBox(height: 8),
           const Text(
-            'OCR로 데이터를 추출하고 있습니다',
-            style: TextStyle(fontSize: 14, color: AppColors.textMuted),
+            'Google Cloud Vision OCR로 텍스트를 추출하고 있습니다',
+            style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
+
+  // ── result: 파싱 결과 편집 ────────────────────────────────────────────────
 
   Widget _buildResult() {
     final total = _ocrItems.fold<int>(0, (sum, e) {
@@ -300,8 +537,37 @@ class _ScanScreenState extends State<ScanScreen>
             '추출된 데이터를 확인하고 수정해주세요',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
-          const SizedBox(height: 24),
-
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.warning_amber,
+                    size: 16,
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -314,7 +580,7 @@ class _ScanScreenState extends State<ScanScreen>
                 // 매장명
                 _labeledTextField('매장명', _storeCtrl),
                 const SizedBox(height: 14),
-                // 구매일 (탭으로 날짜 선택)
+                // 구매일
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -348,7 +614,9 @@ class _ScanScreenState extends State<ScanScreen>
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '${_scanDate.year}.${_scanDate.month.toString().padLeft(2, '0')}.${_scanDate.day.toString().padLeft(2, '0')}',
+                              '${_scanDate.year}.'
+                              '${_scanDate.month.toString().padLeft(2, '0')}.'
+                              '${_scanDate.day.toString().padLeft(2, '0')}',
                               style: const TextStyle(
                                 fontSize: 15,
                                 color: AppColors.text,
@@ -363,16 +631,22 @@ class _ScanScreenState extends State<ScanScreen>
                 const SizedBox(height: 16),
                 const Divider(height: 1, color: AppColors.border),
                 const SizedBox(height: 14),
-                // 아이템 목록
+                // 상품 목록
                 ...List.generate(_ocrItems.length, (i) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Row(
                       children: [
-                        const Icon(
-                          Icons.drag_indicator,
-                          size: 18,
-                          color: AppColors.textMuted,
+                        GestureDetector(
+                          onTap: () => setState(() {
+                            _ocrItems[i].dispose();
+                            _ocrItems.removeAt(i);
+                          }),
+                          child: const Icon(
+                            Icons.remove_circle_outline,
+                            size: 18,
+                            color: AppColors.danger,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -383,7 +657,7 @@ class _ScanScreenState extends State<ScanScreen>
                               fontSize: 14,
                               color: AppColors.text,
                             ),
-                            decoration: _compactDecoration(),
+                            decoration: _compactDecoration(hint: '상품명'),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -405,8 +679,17 @@ class _ScanScreenState extends State<ScanScreen>
                     ),
                   );
                 }),
+                // 상품 추가 버튼
+                TextButton.icon(
+                  onPressed: () =>
+                      setState(() => _ocrItems.add(_OcrItemEntry('', 0))),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('상품 추가', style: TextStyle(fontSize: 13)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                  ),
+                ),
                 const Divider(height: 16, color: AppColors.border),
-                // 합계
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -433,15 +716,16 @@ class _ScanScreenState extends State<ScanScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            '아이템 ${_ocrItems.length}개를 순서대로 검수 후 각각 저장합니다.',
+            '상품 ${_ocrItems.length}개를 순서대로 검수 후 각각 저장합니다.',
             style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
           const SizedBox(height: 20),
-
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _isSaving ? null : _confirmAndSave,
+              onPressed: (_isSaving || _ocrItems.isEmpty)
+                  ? null
+                  : _confirmAndSave,
               icon: _isSaving
                   ? const SizedBox(
                       width: 18,
@@ -471,7 +755,7 @@ class _ScanScreenState extends State<ScanScreen>
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: _rescan,
+              onPressed: _resetToIdle,
               icon: const Icon(Icons.refresh, size: 20),
               label: const Text('다시 스캔', style: TextStyle(fontSize: 16)),
               style: OutlinedButton.styleFrom(
@@ -488,6 +772,10 @@ class _ScanScreenState extends State<ScanScreen>
       ),
     );
   }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // 공통 위젯
+  // ────────────────────────────────────────────────────────────────────────────
 
   Widget _labeledTextField(String label, TextEditingController ctrl) {
     return Column(
@@ -528,9 +816,11 @@ class _ScanScreenState extends State<ScanScreen>
     );
   }
 
-  InputDecoration _compactDecoration({String? suffix}) {
+  InputDecoration _compactDecoration({String? hint, String? suffix}) {
     return InputDecoration(
       isDense: true,
+      hintText: hint,
+      hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
       suffixText: suffix,
       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       border: OutlineInputBorder(
@@ -550,14 +840,18 @@ class _ScanScreenState extends State<ScanScreen>
 
   String _formatPrice(int price) {
     final str = price.toString();
-    final buffer = StringBuffer();
+    final buf = StringBuffer();
     for (var i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buffer.write(',');
-      buffer.write(str[i]);
+      if (i > 0 && (str.length - i) % 3 == 0) buf.write(',');
+      buf.write(str[i]);
     }
-    return '$buffer원';
+    return '$buf원';
   }
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// OCR 결과 아이템 편집용 내부 모델
+// ────────────────────────────────────────────────────────────────────────────
 
 class _OcrItemEntry {
   final TextEditingController nameCtrl;
@@ -565,49 +859,12 @@ class _OcrItemEntry {
 
   _OcrItemEntry(String name, int price)
     : nameCtrl = TextEditingController(text: name),
-      priceCtrl = TextEditingController(text: price.toString());
+      priceCtrl = TextEditingController(
+        text: price > 0 ? price.toString() : '',
+      );
 
   void dispose() {
     nameCtrl.dispose();
     priceCtrl.dispose();
   }
-}
-
-class _CornerPainter extends CustomPainter {
-  final bool isTop;
-  final bool isLeft;
-
-  _CornerPainter({required this.isTop, required this.isLeft});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.primary
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    if (isTop && isLeft) {
-      path.moveTo(0, size.height);
-      path.lineTo(0, 0);
-      path.lineTo(size.width, 0);
-    } else if (isTop && !isLeft) {
-      path.moveTo(0, 0);
-      path.lineTo(size.width, 0);
-      path.lineTo(size.width, size.height);
-    } else if (!isTop && isLeft) {
-      path.moveTo(0, 0);
-      path.lineTo(0, size.height);
-      path.lineTo(size.width, size.height);
-    } else {
-      path.moveTo(0, size.height);
-      path.lineTo(size.width, size.height);
-      path.lineTo(size.width, 0);
-    }
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

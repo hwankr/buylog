@@ -1,7 +1,10 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/group.dart';
 import '../models/item.dart';
+import '../models/item_scope.dart';
 
 /// Supabase 연동 서비스
 ///
@@ -9,17 +12,31 @@ import '../models/item.dart';
 /// 테이블: product_items / purchases / categories / ai_predictions
 /// Storage: product-images 버킷 (공개)
 class SupabaseService {
-  static const _supabaseUrl = 'https://fervijwxdgkwjtcpzskx.supabase.co';
-  static const _anonKey = 'sb_publishable_FO7WmA_Pu4RsGgsfRJzssQ_f0orCu7w';
+  static const _supabaseUrlFromEnvironment = String.fromEnvironment(
+    'SUPABASE_URL',
+  );
+  static const _anonKeyFromEnvironment = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+  );
   static const _storageBucket = 'product-images';
+  static const _groupInviteCodeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
   static SupabaseClient get _db => Supabase.instance.client;
 
-  /// 카테고리 이름 → UUID 로컬 캐시 (앱 세션 동안 유지)
-  static final Map<String, String> _categoryCache = {};
-
   @visibleForTesting
   static ProductImageStorageGateway? debugImageStorageGateway;
+
+  @visibleForTesting
+  static GroupDatabaseGateway? debugGroupDatabaseGateway;
+
+  @visibleForTesting
+  static ItemDatabaseGateway? debugItemDatabaseGateway;
+
+  static GroupDatabaseGateway get _groupDatabaseGateway =>
+      debugGroupDatabaseGateway ?? SupabaseGroupDatabaseGateway(_db);
+
+  static ItemDatabaseGateway get _itemDatabaseGateway =>
+      debugItemDatabaseGateway ?? SupabaseItemDatabaseGateway(_db);
 
   // ────────────────────────────────────────────────────────────────────────────
   // 초기화 & 인증
@@ -30,12 +47,113 @@ class SupabaseService {
 
   /// Supabase 초기화
   static Future<void> initialize() async {
-    await Supabase.initialize(url: _supabaseUrl, anonKey: _anonKey);
+    await dotenv.load(fileName: '.env', isOptional: true);
+    final supabaseUrl = _resolveConfigValue(
+      compileTimeValue: _supabaseUrlFromEnvironment,
+      dotenvKey: 'SUPABASE_URL',
+    );
+    final anonKey = _resolveConfigValue(
+      compileTimeValue: _anonKeyFromEnvironment,
+      dotenvKey: 'SUPABASE_ANON_KEY',
+    );
+
+    if (supabaseUrl == null || anonKey == null) {
+      throw StateError(
+        'Missing Supabase configuration. Set SUPABASE_URL and SUPABASE_ANON_KEY.',
+      );
+    }
+
+    await Supabase.initialize(url: supabaseUrl, anonKey: anonKey);
     debugPrint('[Supabase] 초기화 완료');
+  }
+
+  static String? _resolveConfigValue({
+    required String compileTimeValue,
+    required String dotenvKey,
+  }) {
+    final value = compileTimeValue.isNotEmpty
+        ? compileTimeValue
+        : dotenv.env[dotenvKey];
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    return value.trim();
+  }
+
+  @visibleForTesting
+  static List<Map<String, dynamic>> normalizePostgrestRows(Object? rows) {
+    if (rows is! Iterable) {
+      return const <Map<String, dynamic>>[];
+    }
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
   }
 
   /// 현재 사용자 ID
   static String get currentUserId => _devUserId;
+
+  static Future<BuylogGroup?> loadDefaultGroup() async {
+    final row = await _groupDatabaseGateway.loadDefaultGroup(currentUserId);
+    if (row == null) {
+      return null;
+    }
+
+    return BuylogGroup.fromSupabase(row);
+  }
+
+  static Future<List<BuylogGroup>> loadGroupsForUser() async {
+    final rows = await _groupDatabaseGateway.loadGroupsForUser(currentUserId);
+    return rows.map(BuylogGroup.fromSupabase).toList(growable: false);
+  }
+
+  static Future<BuylogGroup> createGroup({required String name}) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Group name is required.');
+    }
+
+    final createdGroup = await _groupDatabaseGateway.createGroupWithOwner(
+      name: trimmedName,
+      inviteCode: _generateInviteCode(),
+    );
+    return BuylogGroup.fromSupabase(createdGroup);
+  }
+
+  static Future<List<BuylogGroupMember>> loadGroupMembers({
+    required String groupId,
+  }) async {
+    final trimmedGroupId = groupId.trim();
+    if (trimmedGroupId.isEmpty) {
+      throw ArgumentError.value(groupId, 'groupId', 'Group id is required.');
+    }
+
+    final rows = await _groupDatabaseGateway.loadGroupMembers(
+      groupId: trimmedGroupId,
+    );
+    return List<BuylogGroupMember>.unmodifiable(
+      rows.map(BuylogGroupMember.fromSupabase),
+    );
+  }
+
+  static Future<void> leaveGroup({
+    required String groupId,
+    String? newOwnerUserId,
+  }) async {
+    final trimmedGroupId = groupId.trim();
+    if (trimmedGroupId.isEmpty) {
+      throw ArgumentError.value(groupId, 'groupId', 'Group id is required.');
+    }
+
+    final trimmedOwnerUserId = newOwnerUserId?.trim();
+    await _groupDatabaseGateway.leaveGroup(
+      groupId: trimmedGroupId,
+      newOwnerUserId: trimmedOwnerUserId?.isEmpty == true
+          ? null
+          : trimmedOwnerUserId,
+    );
+  }
 
   // ────────────────────────────────────────────────────────────────────────────
   // 이미지 업로드
@@ -74,48 +192,8 @@ class SupabaseService {
 
   /// 현재 사용자의 모든 제품을 Supabase에서 불러옵니다.
   static Future<List<ConsumableItem>> loadItems() async {
-    final uid = currentUserId;
     try {
-      final rows = await _db
-          .from('product_items')
-          .select('''
-          id,
-          name,
-          brand,
-          image_url,
-          replacement_cycle_days,
-          created_at,
-          categories ( id, name ),
-          purchases ( id, purchase_date, price, store_name ),
-          ai_predictions ( predicted_cycle_days, confidence )
-        ''')
-          .eq('user_id', uid)
-          .order('created_at', ascending: false);
-
-      return rows.map<ConsumableItem>((row) {
-        final categoryName =
-            (row['categories'] as Map<String, dynamic>?)?['name'] as String? ??
-            '기타';
-
-        final purchases =
-            (row['purchases'] as List<dynamic>?)
-                ?.cast<Map<String, dynamic>>() ??
-            [];
-
-        final aiList =
-            (row['ai_predictions'] as List<dynamic>?)
-                ?.cast<Map<String, dynamic>>() ??
-            [];
-        // 가장 최근 AI 예측 1건 사용
-        final ai = aiList.isNotEmpty ? aiList.last : null;
-
-        return ConsumableItem.fromSupabase(
-          data: row,
-          categoryName: categoryName,
-          purchases: purchases,
-          aiPrediction: ai,
-        );
-      }).toList();
+      return await loadItemsForScope(const ItemScope.personal());
     } catch (e) {
       debugPrint('[Supabase] loadItems 오류: $e');
       return [];
@@ -126,18 +204,58 @@ class SupabaseService {
   // 제품 저장 (신규 등록 & 수정)
   // ────────────────────────────────────────────────────────────────────────────
 
+  static Future<List<ConsumableItem>> loadItemsForScope(ItemScope scope) async {
+    final rows = await _itemDatabaseGateway.loadItems(
+      userId: scope.isPersonal ? currentUserId : null,
+      groupId: scope.isGroup ? scope.id : null,
+    );
+    return rows.map(_itemFromJoinedRow).toList(growable: false);
+  }
+
+  static ConsumableItem _itemFromJoinedRow(Map<String, dynamic> row) {
+    final categoryName =
+        (row['categories'] as Map<String, dynamic>?)?['name'] as String? ??
+        '기타';
+    final purchases =
+        (row['purchases'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ??
+        <Map<String, dynamic>>[];
+    final aiList =
+        (row['ai_predictions'] as List<dynamic>?)
+            ?.cast<Map<String, dynamic>>() ??
+        <Map<String, dynamic>>[];
+    final ai = aiList.isNotEmpty ? aiList.last : null;
+
+    return ConsumableItem.fromSupabase(
+      data: row,
+      categoryName: categoryName,
+      purchases: purchases,
+      aiPrediction: ai,
+    );
+  }
+
   /// ConsumableItem을 Supabase에 upsert합니다.
   ///
   /// - product_items 테이블에 upsert (id 기준)
   /// - id가 없는 신규 PurchaseRecord만 purchases 테이블에 insert
-  static Future<void> saveItem(ConsumableItem item) async {
+  static Future<void> saveItem(
+    ConsumableItem item, {
+    ItemScope scope = const ItemScope.personal(),
+  }) async {
     final uid = currentUserId;
-    try {
-      final categoryId = await _ensureCategory(item.category);
+    final userId = scope.isPersonal ? uid : null;
+    final groupId = scope.isGroup ? scope.id : null;
 
-      await _db.from('product_items').upsert({
+    try {
+      final categoryId = await _itemDatabaseGateway.ensureCategory(
+        name: item.category,
+        userId: userId,
+        groupId: groupId,
+      );
+
+      await _itemDatabaseGateway.upsertItem({
         'id': item.id,
-        'user_id': uid,
+        'user_id': userId,
+        'group_id': groupId,
         'registered_by': uid,
         'category_id': categoryId,
         'name': item.name,
@@ -149,7 +267,7 @@ class SupabaseService {
       // id가 null인 신규 구매 이력만 삽입
       for (final record in item.purchaseHistory) {
         if (record.id == null) {
-          await _db.from('purchases').insert({
+          await _itemDatabaseGateway.insertPurchase({
             'product_item_id': item.id,
             'purchased_by': uid,
             'purchase_date': record.date.toIso8601String().substring(0, 10),
@@ -202,46 +320,6 @@ class SupabaseService {
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // 카테고리 조회 또는 생성
-  // ────────────────────────────────────────────────────────────────────────────
-
-  /// 카테고리 이름으로 UUID를 반환합니다. 없으면 새로 생성합니다.
-  static Future<String> _ensureCategory(String name) async {
-    if (_categoryCache.containsKey(name)) return _categoryCache[name]!;
-
-    final uid = currentUserId;
-
-    // 기존 카테고리 조회
-    final existing = await _db
-        .from('categories')
-        .select('id')
-        .eq('user_id', uid)
-        .eq('name', name)
-        .maybeSingle();
-
-    if (existing != null) {
-      _categoryCache[name] = existing['id'] as String;
-      return existing['id'] as String;
-    }
-
-    // 없으면 생성
-    final created = await _db
-        .from('categories')
-        .insert({
-          'user_id': uid,
-          'name': name,
-          'icon': _iconNameForCategory(name),
-          'color': '#4F7FFF',
-          'sort_order': 0,
-        })
-        .select('id')
-        .single();
-
-    _categoryCache[name] = created['id'] as String;
-    return created['id'] as String;
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
   // UUID 생성 (외부 패키지 없이 dart:math 사용)
   // ────────────────────────────────────────────────────────────────────────────
 
@@ -257,6 +335,19 @@ class SupabaseService {
         '${hex.substring(20)}';
   }
 
+  static String _generateInviteCode() {
+    final random = Random.secure();
+    final buffer = StringBuffer('BUY-');
+    for (var i = 0; i < 6; i++) {
+      buffer.write(
+        _groupInviteCodeAlphabet[random.nextInt(
+          _groupInviteCodeAlphabet.length,
+        )],
+      );
+    }
+    return buffer.toString();
+  }
+
   static String _iconNameForCategory(String name) {
     return switch (name) {
       '욕실/위생' => 'bathroom',
@@ -266,6 +357,225 @@ class SupabaseService {
       '가전/필터' => 'air',
       _ => 'category',
     };
+  }
+}
+
+abstract class GroupDatabaseGateway {
+  Future<Map<String, dynamic>?> loadDefaultGroup(String userId);
+
+  Future<List<Map<String, dynamic>>> loadGroupsForUser(String userId);
+
+  Future<Map<String, dynamic>> createGroupWithOwner({
+    required String name,
+    required String inviteCode,
+  });
+
+  Future<List<Map<String, dynamic>>> loadGroupMembers({
+    required String groupId,
+  });
+
+  Future<void> leaveGroup({
+    required String groupId,
+    required String? newOwnerUserId,
+  });
+}
+
+class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
+  SupabaseGroupDatabaseGateway(this._client);
+
+  static const _memberProjection = '''
+          id,
+          user_id,
+          role,
+          joined_at,
+          users (
+            display_name,
+            email
+          )
+      ''';
+
+  static const _groupProjection =
+      '''
+        id,
+        name,
+        invite_code,
+        created_by,
+        created_at,
+        group_members (
+          $_memberProjection
+        )
+      ''';
+
+  final SupabaseClient _client;
+
+  @override
+  Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
+    final userRow = await _client
+        .from('users')
+        .select('default_group_id')
+        .eq('id', userId)
+        .maybeSingle();
+
+    final groupId = userRow?['default_group_id'] as String?;
+    if (groupId == null || groupId.isEmpty) {
+      return null;
+    }
+
+    final groupRow = await _client
+        .from('groups')
+        .select(_groupProjection)
+        .eq('id', groupId)
+        .single();
+    return Map<String, dynamic>.from(groupRow);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> loadGroupsForUser(String userId) async {
+    final rows = await _client
+        .from('group_members')
+        .select('groups ($_groupProjection)')
+        .eq('user_id', userId)
+        .order('joined_at', ascending: true);
+    return SupabaseService.normalizePostgrestRows(rows)
+        .map((row) => row['groups'])
+        .whereType<Map>()
+        .map(Map<String, dynamic>.from)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<Map<String, dynamic>> createGroupWithOwner({
+    required String name,
+    required String inviteCode,
+  }) async {
+    final row = await _client
+        .rpc(
+          'create_group_with_owner',
+          params: {'group_name': name, 'group_invite_code': inviteCode},
+        )
+        .select(_groupProjection)
+        .single();
+    return Map<String, dynamic>.from(row);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> loadGroupMembers({
+    required String groupId,
+  }) async {
+    final rows = await _client
+        .from('group_members')
+        .select(_memberProjection)
+        .eq('group_id', groupId)
+        .order('joined_at', ascending: true);
+    return SupabaseService.normalizePostgrestRows(rows);
+  }
+
+  @override
+  Future<void> leaveGroup({
+    required String groupId,
+    required String? newOwnerUserId,
+  }) async {
+    await _client.rpc(
+      'leave_group',
+      params: {'target_group_id': groupId, 'new_owner_user_id': newOwnerUserId},
+    );
+  }
+}
+
+abstract class ItemDatabaseGateway {
+  Future<List<Map<String, dynamic>>> loadItems({
+    required String? userId,
+    required String? groupId,
+  });
+
+  Future<String> ensureCategory({
+    required String name,
+    required String? userId,
+    required String? groupId,
+  });
+
+  Future<void> upsertItem(Map<String, dynamic> payload);
+
+  Future<void> insertPurchase(Map<String, dynamic> payload);
+}
+
+class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
+  const SupabaseItemDatabaseGateway(this._client);
+
+  final SupabaseClient _client;
+
+  static const _itemProjection = '''
+          id,
+          user_id,
+          group_id,
+          registered_by,
+          name,
+          brand,
+          image_url,
+          replacement_cycle_days,
+          created_at,
+          categories ( id, name ),
+          purchases ( id, purchase_date, price, store_name ),
+          ai_predictions ( predicted_cycle_days, confidence )
+        ''';
+
+  @override
+  Future<List<Map<String, dynamic>>> loadItems({
+    required String? userId,
+    required String? groupId,
+  }) async {
+    dynamic query = _client.from('product_items').select(_itemProjection);
+    if (groupId != null) {
+      query = query.eq('group_id', groupId);
+    } else {
+      query = query.eq('user_id', userId!);
+    }
+    final rows = await query.order('created_at', ascending: false);
+    return SupabaseService.normalizePostgrestRows(rows);
+  }
+
+  @override
+  Future<String> ensureCategory({
+    required String name,
+    required String? userId,
+    required String? groupId,
+  }) async {
+    dynamic query = _client.from('categories').select('id').eq('name', name);
+    if (groupId != null) {
+      query = query.eq('group_id', groupId);
+    } else {
+      query = query.eq('user_id', userId!);
+    }
+
+    final existing = await query.maybeSingle();
+    if (existing != null) {
+      return existing['id'] as String;
+    }
+
+    final created = await _client
+        .from('categories')
+        .insert({
+          'user_id': userId,
+          'group_id': groupId,
+          'name': name,
+          'icon': SupabaseService._iconNameForCategory(name),
+          'color': '#4F7FFF',
+          'sort_order': 0,
+        })
+        .select('id')
+        .single();
+
+    return created['id'] as String;
+  }
+
+  @override
+  Future<void> upsertItem(Map<String, dynamic> payload) async {
+    await _client.from('product_items').upsert(payload);
+  }
+
+  @override
+  Future<void> insertPurchase(Map<String, dynamic> payload) async {
+    await _client.from('purchases').insert(payload);
   }
 }
 
