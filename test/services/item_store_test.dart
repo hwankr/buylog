@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:buylog/models/item.dart';
+import 'package:buylog/models/item_scope.dart';
 import 'package:buylog/services/item_store.dart';
+import 'package:buylog/services/supabase_service.dart';
 
 ConsumableItem _seed(String id, {String name = 'X', int days = 10}) =>
     ConsumableItem(
@@ -57,5 +59,87 @@ void main() {
 
       expect(ItemStore.instance.value.single.name, 'old');
     });
+
+    test('add: group scope saves without appending to personal list', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+      addTearDown(() => SupabaseService.debugItemDatabaseGateway = null);
+
+      ItemStore.instance.value = [_seed('personal')];
+
+      await ItemStore.instance.add(
+        _seed('group-item'),
+        scope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+      );
+
+      expect(ItemStore.instance.value.map((item) => item.id), ['personal']);
+      expect(gateway.upsertedItemPayload?['group_id'], 'group-1');
+      expect(gateway.upsertedItemPayload?['user_id'], isNull);
+    });
+
+    test('findDuplicateByName only matches items in the requested scope', () {
+      ItemStore.instance.value = [
+        _seed('personal', name: '세제'),
+        ConsumableItem(
+          id: 'group-item',
+          name: '세제',
+          brand: 'B',
+          category: '기타',
+          icon: ConsumableItem.iconForCategory('기타'),
+          daysRemaining: 10,
+          cycleDays: 30,
+          progress: 0.5,
+          groupId: 'group-1',
+        ),
+      ];
+
+      final personal = ItemStore.instance.findDuplicateByName(
+        ' 세제 ',
+        scope: const ItemScope.personal(),
+      );
+      final group = ItemStore.instance.findDuplicateByName(
+        '세제',
+        scope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+      );
+      final otherGroup = ItemStore.instance.findDuplicateByName(
+        '세제',
+        scope: const ItemScope.group(id: 'group-2', label: '사무실'),
+      );
+
+      expect(personal?.id, 'personal');
+      expect(group?.id, 'group-item');
+      expect(otherGroup, isNull);
+    });
   });
+}
+
+class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
+  Object? saveError;
+  Map<String, dynamic>? upsertedItemPayload;
+
+  @override
+  Future<List<Map<String, dynamic>>> loadItems({
+    required String? userId,
+    required String? groupId,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<String> ensureCategory({
+    required String name,
+    required String? userId,
+    required String? groupId,
+  }) async {
+    return 'category-1';
+  }
+
+  @override
+  Future<void> upsertItem(Map<String, dynamic> payload) async {
+    if (saveError != null) throw saveError!;
+    upsertedItemPayload = Map<String, dynamic>.from(payload);
+  }
+
+  @override
+  Future<void> insertPurchase(Map<String, dynamic> payload) async {}
 }

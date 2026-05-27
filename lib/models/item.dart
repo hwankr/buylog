@@ -13,6 +13,8 @@ class ConsumableItem {
   final double? aiConfidence;
   final List<PurchaseRecord> purchaseHistory;
   final String? imageUrl;
+  final String? groupId;
+  final String? registeredBy;
 
   const ConsumableItem({
     required this.id,
@@ -27,6 +29,8 @@ class ConsumableItem {
     this.aiConfidence,
     this.purchaseHistory = const [],
     this.imageUrl,
+    this.groupId,
+    this.registeredBy,
   });
 
   /// Supabase product_items 행 + 관련 데이터로 ConsumableItem 생성
@@ -69,6 +73,8 @@ class ConsumableItem {
       cycleDays: cycleDays,
       progress: (daysSince / cycleDays).clamp(0.0, 1.0),
       imageUrl: data['image_url'] as String?,
+      groupId: data['group_id'] as String?,
+      registeredBy: data['registered_by'] as String?,
       aiPredictedDays: aiPrediction?['predicted_cycle_days'] as int?,
       aiConfidence: (aiPrediction?['confidence'] as num?)?.toDouble(),
       purchaseHistory: sorted

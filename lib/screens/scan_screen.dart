@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import '../models/item_scope.dart';
 import '../theme/app_theme.dart';
 import 'add_item_screen.dart';
 
 class ScanScreen extends StatefulWidget {
-  const ScanScreen({super.key});
+  const ScanScreen({super.key, this.targetScope = const ItemScope.personal()});
+
+  final ItemScope targetScope;
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
@@ -95,6 +98,7 @@ class _ScanScreenState extends State<ScanScreen>
           context,
           MaterialPageRoute(
             builder: (_) => AddItemScreen(
+              targetScope: widget.targetScope,
               prefillData: OcrPrefillData(
                 productName: ocrItem.nameCtrl.text.trim(),
                 price: price,
