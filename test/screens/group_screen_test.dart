@@ -1,7 +1,9 @@
 import 'package:buylog/models/group.dart';
 import 'package:buylog/models/item.dart';
 import 'package:buylog/models/item_scope.dart';
+import 'package:buylog/screens/add_item_screen.dart';
 import 'package:buylog/screens/group_screen.dart';
+import 'package:buylog/screens/scan_screen.dart';
 import 'package:buylog/services/group_store.dart';
 import 'package:buylog/services/item_store.dart';
 import 'package:buylog/services/supabase_service.dart';
@@ -406,6 +408,98 @@ void main() {
     expect(itemGateway.loadItemsCalls, 1);
   });
 
+  testWidgets('existing group page exposes in-page add actions', (
+    tester,
+  ) async {
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+
+    expect(find.text('물품 추가'), findsOneWidget);
+    expect(find.text('영수증 스캔'), findsOneWidget);
+    expect(find.text('그룹 추가'), findsOneWidget);
+  });
+
+  testWidgets('manual group page add saves with the selected group id', (
+    tester,
+  ) async {
+    final itemGateway = _RecordingItemDatabaseGateway();
+    SupabaseService.debugItemDatabaseGateway = itemGateway;
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+    await tester.tap(find.text('물품 추가'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AddItemScreen), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField).at(0), '세제');
+    await tester.enterText(find.byType(TextFormField).at(1), '브랜드');
+    await tester.enterText(find.byType(TextFormField).at(2), '30');
+    await tester.enterText(find.byType(TextFormField).at(3), '8900');
+    await tester.enterText(find.byType(TextFormField).at(4), '마트');
+    await tester.tap(find.text('등록 완료'));
+    await tester.pumpAndSettle();
+
+    expect(itemGateway.upsertedItemPayload?['group_id'], 'group-1');
+    expect(itemGateway.upsertedItemPayload?['user_id'], isNull);
+  });
+
+  testWidgets('scan group page action opens ScanScreen', (tester) async {
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+    await tester.tap(find.text('영수증 스캔'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(ScanScreen), findsOneWidget);
+  });
+
+  testWidgets('group add action creates another group from non-empty state', (
+    tester,
+  ) async {
+    final gateway = _FakeGroupDatabaseGateway()..nextCreatedGroupId = 'group-2';
+    SupabaseService.debugGroupDatabaseGateway = gateway;
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group(id: 'group-1', name: '우리 가족')],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+    await tester.tap(find.text('그룹 추가'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField), '사무실');
+    await tester.tap(find.text('만들기'));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(gateway.createGroupWithOwnerCalls, 1);
+    expect(gateway.createdGroupValues?['name'], '사무실');
+    expect(GroupStore.instance.value.groups.map((group) => group.name), [
+      '우리 가족',
+      '사무실',
+    ]);
+    expect(
+      GroupStore.instance.value.selectedScope,
+      const ItemScope.group(id: 'group-2', label: '사무실'),
+    );
+  });
+
   testWidgets('empty group item list shows add CTA', (tester) async {
     SupabaseService.debugItemDatabaseGateway = _RecordingItemDatabaseGateway();
     GroupStore.instance.value = GroupState(
@@ -484,6 +578,7 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
   String? leaveGroupGroupId;
   String? leaveGroupNewOwnerUserId;
   Map<String, dynamic>? _currentGroup;
+  String nextCreatedGroupId = 'group-1';
 
   @override
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
@@ -514,7 +609,11 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
       'name': name,
       'invite_code': inviteCode,
     };
-    final group = _groupRow(name: name, inviteCode: inviteCode);
+    final group = _groupRow(
+      id: nextCreatedGroupId,
+      name: name,
+      inviteCode: inviteCode,
+    );
     _currentGroup = group;
     return group;
   }
@@ -623,6 +722,7 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   String? lastUserId;
   String? lastGroupId;
   List<Map<String, dynamic>> loadItemsResult = const [];
+  Map<String, dynamic>? upsertedItemPayload;
 
   @override
   Future<List<Map<String, dynamic>>> loadItems({
@@ -645,7 +745,9 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   }
 
   @override
-  Future<void> upsertItem(Map<String, dynamic> payload) async {}
+  Future<void> upsertItem(Map<String, dynamic> payload) async {
+    upsertedItemPayload = Map<String, dynamic>.from(payload);
+  }
 
   @override
   Future<void> insertPurchase(Map<String, dynamic> payload) async {}

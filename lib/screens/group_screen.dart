@@ -10,10 +10,12 @@ import '../services/item_store.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/group/group_item_filter_chips.dart';
+import '../widgets/group/group_quick_actions.dart';
 import '../widgets/group/group_scoped_item_list.dart';
 import '../widgets/group/group_status_summary.dart';
 import '../widgets/group/item_scope_tabs.dart';
 import 'add_item_screen.dart';
+import 'scan_screen.dart';
 
 class GroupScreen extends StatefulWidget {
   const GroupScreen({super.key});
@@ -103,6 +105,42 @@ class _GroupScreenState extends State<GroupScreen> {
     );
   }
 
+  void _openScopedScan(ItemScope scope) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (scanContext) => Scaffold(
+          backgroundColor: AppColors.background,
+          body: Stack(
+            children: [
+              ScanScreen(targetScope: scope),
+              Positioned(
+                top: MediaQuery.of(scanContext).padding.top + 8,
+                right: 12,
+                child: Material(
+                  color: AppColors.surface,
+                  shape: const CircleBorder(),
+                  elevation: 1,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    color: AppColors.text,
+                    onPressed: () => Navigator.of(scanContext).pop(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openCreateGroupDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => const _CreateGroupDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -141,6 +179,16 @@ class _GroupScreenState extends State<GroupScreen> {
                     scopes: state.groupScopes,
                     selectedScope: selectedGroupScope!,
                     onSelected: _selectScope,
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: GroupQuickActions(
+                      onAddItem: () => _openScopedAdd(selectedGroupScope),
+                      onScanReceipt: () => _openScopedScan(selectedGroupScope),
+                      onCreateGroup: _openCreateGroupDialog,
+                      isCreateGroupDisabled: state.isSaving,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   if (selectedGroup != null)

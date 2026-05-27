@@ -419,6 +419,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_effectiveScope.isGroup) ...[
+                _buildScopeBanner(),
+                const SizedBox(height: 20),
+              ],
               if (widget.isOcrReview) ...[
                 _buildOcrBanner(),
                 const SizedBox(height: 20),
@@ -462,6 +466,39 @@ class _AddItemScreenState extends State<AddItemScreen> {
         fontSize: 16,
         fontWeight: FontWeight.w700,
         color: AppColors.text,
+      ),
+    );
+  }
+
+  Widget _buildScopeBanner() {
+    final scope = _effectiveScope;
+    if (!scope.isGroup) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primaryLight2,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primaryLight, width: 0.5),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.group_outlined, size: 18, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${scope.label}에 추가 중',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.primaryDark,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

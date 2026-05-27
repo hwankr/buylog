@@ -231,6 +231,32 @@ void main() {
       expect(gateway.loadDefaultGroupCalls, 0);
     });
 
+    test(
+      'createGroup appends a new group and selects it when groups already exist',
+      () async {
+        GroupStore.instance.value = GroupState(
+          groups: <BuylogGroup>[_groupWithMembers()],
+          selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+        gateway.nextCreatedGroupId = 'group-2';
+
+        await GroupStore.instance.createGroup('사무실');
+
+        expect(GroupStore.instance.value.groups.map((group) => group.name), [
+          '우리 가족',
+          '사무실',
+        ]);
+        expect(
+          GroupStore.instance.value.selectedScope,
+          const ItemScope.group(id: 'group-2', label: '사무실'),
+        );
+        expect(
+          GroupStore.instance.value.selectedGroupScope,
+          const ItemScope.group(id: 'group-2', label: '사무실'),
+        );
+      },
+    );
+
     test('builds personal and joined group scopes after initialize', () async {
       gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
         _groupRow(id: 'group-1', name: '우리 가족'),
@@ -584,6 +610,7 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   Map<String, dynamic>? createdGroupValues;
   Object? createGroupWithOwnerError;
   List<Map<String, dynamic>> loadGroupMembersResult = const [];
+  String nextCreatedGroupId = 'group-1';
 
   @override
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
@@ -622,7 +649,7 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
       'invite_code': inviteCode,
     };
     return <String, dynamic>{
-      'id': 'group-1',
+      'id': nextCreatedGroupId,
       'name': name,
       'invite_code': inviteCode,
       'created_by': SupabaseService.currentUserId,
