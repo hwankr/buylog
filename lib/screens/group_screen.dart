@@ -5,6 +5,7 @@ import '../models/item_scope.dart';
 import '../services/group_items_store.dart';
 import '../services/group_store.dart';
 import '../services/item_store.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/group/group_scoped_item_list.dart';
 import '../widgets/group/item_scope_tabs.dart';
@@ -85,6 +86,7 @@ class _GroupScreenState extends State<GroupScreen> {
                     child: _GroupCard(
                       group: selectedGroup,
                       isRefreshingMembers: state.isRefreshingMembers,
+                      isLeavingGroup: state.isLeavingGroup,
                       onRefreshMembers: () => GroupStore.instance
                           .refreshMembers(groupId: selectedGroup.id),
                     ),
@@ -201,11 +203,13 @@ class _GroupCard extends StatelessWidget {
   const _GroupCard({
     required this.group,
     required this.isRefreshingMembers,
+    required this.isLeavingGroup,
     required this.onRefreshMembers,
   });
 
   final BuylogGroup group;
   final bool isRefreshingMembers;
+  final bool isLeavingGroup;
   final VoidCallback onRefreshMembers;
 
   @override
@@ -259,6 +263,26 @@ class _GroupCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: isLeavingGroup
+                  ? null
+                  : () => showDialog<void>(
+                      context: context,
+                      builder: (_) => _LeaveGroupDialog(group: group),
+                    ),
+              icon: isLeavingGroup
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.logout, size: 18),
+              label: const Text('그룹 탈퇴'),
             ),
           ),
           const SizedBox(height: 20),
@@ -360,6 +384,125 @@ class _MemberRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LeaveGroupDialog extends StatefulWidget {
+  const _LeaveGroupDialog({required this.group});
+
+  final BuylogGroup group;
+
+  @override
+  State<_LeaveGroupDialog> createState() => _LeaveGroupDialogState();
+}
+
+class _LeaveGroupDialogState extends State<_LeaveGroupDialog> {
+  String? _selectedNewOwnerUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    final candidates = widget.group.delegationCandidates(
+      SupabaseService.currentUserId,
+    );
+    _selectedNewOwnerUserId = candidates.isEmpty
+        ? null
+        : candidates.first.userId;
+  }
+
+  Future<void> _submit() async {
+    final isOwner = widget.group.isOwner(SupabaseService.currentUserId);
+    final candidates = widget.group.delegationCandidates(
+      SupabaseService.currentUserId,
+    );
+
+    try {
+      await GroupStore.instance.leaveGroup(
+        groupId: widget.group.id,
+        newOwnerUserId: isOwner && candidates.isNotEmpty
+            ? _selectedNewOwnerUserId
+            : null,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isOwner = widget.group.isOwner(SupabaseService.currentUserId);
+    final candidates = widget.group.delegationCandidates(
+      SupabaseService.currentUserId,
+    );
+    final requiresDelegation = isOwner && candidates.isNotEmpty;
+
+    return ValueListenableBuilder<GroupState>(
+      valueListenable: GroupStore.instance,
+      builder: (context, state, _) {
+        return AlertDialog(
+          title: Text(requiresDelegation ? '관리자 위임 후 탈퇴' : '그룹 탈퇴'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('이 그룹에서 나가면 그룹 물품과 멤버 목록을 볼 수 없습니다.'),
+              if (requiresDelegation) ...[
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedNewOwnerUserId,
+                  decoration: const InputDecoration(labelText: '새 관리자'),
+                  items: [
+                    for (final member in candidates)
+                      DropdownMenuItem<String>(
+                        value: member.userId,
+                        child: Text(member.displayName),
+                      ),
+                  ],
+                  onChanged: state.isLeavingGroup
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _selectedNewOwnerUserId = value;
+                          });
+                        },
+                ),
+              ],
+              if (state.errorMessage?.isNotEmpty == true) ...[
+                const SizedBox(height: 12),
+                Text(
+                  state.errorMessage!,
+                  style: const TextStyle(color: AppColors.danger),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: state.isLeavingGroup
+                  ? null
+                  : () => Navigator.of(context).pop(),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: state.isLeavingGroup ? null : _submit,
+              child: state.isLeavingGroup
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(requiresDelegation ? '위임 후 탈퇴' : '탈퇴'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

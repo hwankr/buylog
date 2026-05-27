@@ -13,9 +13,12 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadGroupsForUserCalls = 0;
   int createGroupWithOwnerCalls = 0;
   int loadGroupMembersCalls = 0;
+  int leaveGroupCalls = 0;
   String? createGroupWithOwnerName;
   String? createGroupWithOwnerInviteCode;
   String? loadGroupMembersGroupId;
+  String? leaveGroupGroupId;
+  String? leaveGroupNewOwnerUserId;
   Map<String, dynamic>? loadDefaultGroupResult;
   List<Map<String, dynamic>> loadGroupsForUserResult = const [];
   Map<String, dynamic>? createGroupWithOwnerResult;
@@ -76,6 +79,16 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
     loadGroupMembersCalls += 1;
     loadGroupMembersGroupId = groupId;
     return loadGroupMembersResult;
+  }
+
+  @override
+  Future<void> leaveGroup({
+    required String groupId,
+    required String? newOwnerUserId,
+  }) async {
+    leaveGroupCalls += 1;
+    leaveGroupGroupId = groupId;
+    leaveGroupNewOwnerUserId = newOwnerUserId;
   }
 }
 
@@ -186,6 +199,20 @@ class _RecordingImageStorageGateway implements ProductImageStorageGateway {
 }
 
 void main() {
+  test('normalizePostgrestRows returns typed map copies from dynamic rows', () {
+    final rawRows = <dynamic>[
+      <String, dynamic>{'id': 'row-1'},
+      <String, dynamic>{'id': 'row-2'},
+    ];
+
+    final rows = SupabaseService.normalizePostgrestRows(rawRows);
+
+    expect(rows, isA<List<Map<String, dynamic>>>());
+    expect(rows, hasLength(2));
+    rawRows.first['id'] = 'changed';
+    expect(rows.first['id'], 'row-1');
+  });
+
   group('SupabaseService.createGroup', () {
     tearDown(() {
       SupabaseService.debugGroupDatabaseGateway = null;
@@ -327,6 +354,55 @@ void main() {
       );
 
       expect(gateway.loadGroupMembersCalls, 0);
+    });
+  });
+
+  group('SupabaseService.leaveGroup', () {
+    tearDown(() {
+      SupabaseService.debugGroupDatabaseGateway = null;
+    });
+
+    test('trims ids and delegates to the group gateway', () async {
+      final gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      await SupabaseService.leaveGroup(
+        groupId: ' group-1 ',
+        newOwnerUserId: ' member-user ',
+      );
+
+      expect(gateway.leaveGroupCalls, 1);
+      expect(gateway.leaveGroupGroupId, 'group-1');
+      expect(gateway.leaveGroupNewOwnerUserId, 'member-user');
+    });
+
+    test('passes null owner delegation for non-owner leave', () async {
+      final gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      await SupabaseService.leaveGroup(groupId: 'group-1');
+
+      expect(gateway.leaveGroupCalls, 1);
+      expect(gateway.leaveGroupGroupId, 'group-1');
+      expect(gateway.leaveGroupNewOwnerUserId, isNull);
+    });
+
+    test('rejects blank group ids without calling the gateway', () async {
+      final gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      await expectLater(
+        SupabaseService.leaveGroup(groupId: '   '),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.message,
+            'message',
+            'Group id is required.',
+          ),
+        ),
+      );
+
+      expect(gateway.leaveGroupCalls, 0);
     });
   });
 

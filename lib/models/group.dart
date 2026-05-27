@@ -58,6 +58,29 @@ class BuylogGroup {
     );
   }
 
+  BuylogGroupMember? memberForUser(String userId) {
+    final trimmedUserId = userId.trim();
+    if (trimmedUserId.isEmpty) return null;
+
+    for (final member in members) {
+      if (member.userId == trimmedUserId) {
+        return member;
+      }
+    }
+    return null;
+  }
+
+  bool isOwner(String userId) {
+    return memberForUser(userId)?.role == GroupRole.owner;
+  }
+
+  List<BuylogGroupMember> delegationCandidates(String currentUserId) {
+    final trimmedUserId = currentUserId.trim();
+    return List<BuylogGroupMember>.unmodifiable(
+      members.where((member) => member.userId != trimmedUserId),
+    );
+  }
+
   factory BuylogGroup.fromSupabase(Map<String, dynamic> row) {
     final members = row['group_members'] as List<dynamic>?;
 

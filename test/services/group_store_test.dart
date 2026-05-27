@@ -103,6 +103,27 @@ void main() {
     });
   });
 
+  group('BuylogGroup membership helpers', () {
+    test('finds the current user member and owner status', () {
+      final group = _groupWithMembers();
+
+      expect(group.memberForUser('owner-user')?.role, GroupRole.owner);
+      expect(group.memberForUser('member-user')?.role, GroupRole.member);
+      expect(group.memberForUser('missing-user'), isNull);
+      expect(group.isOwner('owner-user'), isTrue);
+      expect(group.isOwner('member-user'), isFalse);
+    });
+
+    test('returns delegation candidates excluding current user', () {
+      final group = _groupWithMembers();
+
+      final candidates = group.delegationCandidates('owner-user');
+
+      expect(candidates.map((member) => member.userId), ['member-user']);
+      expect(candidates.single.displayName, '멤버');
+    });
+  });
+
   group('BuylogGroupMember Supabase parsing', () {
     test('falls back to email when display name is missing', () {
       final member = BuylogGroupMember.fromSupabase({
@@ -331,6 +352,76 @@ void main() {
         );
       },
     );
+
+    test('leaves the selected group and reloads joined groups', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+      await GroupStore.instance.initialize();
+      GroupStore.instance.selectScope(
+        const ItemScope.group(id: 'group-1', label: '우리 가족'),
+      );
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+
+      await GroupStore.instance.leaveGroup(groupId: 'group-1');
+
+      expect(gateway.leaveGroupCalls, 1);
+      expect(gateway.leaveGroupGroupId, 'group-1');
+      expect(gateway.leaveGroupNewOwnerUserId, isNull);
+      expect(GroupStore.instance.value.groups.map((group) => group.id), [
+        'group-2',
+      ]);
+      expect(
+        GroupStore.instance.value.selectedScope,
+        const ItemScope.personal(),
+      );
+      expect(GroupStore.instance.value.isLeavingGroup, isFalse);
+      expect(GroupStore.instance.value.errorMessage, isNull);
+    });
+
+    test('passes owner delegation user id when leaving as owner', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+      ];
+      await GroupStore.instance.initialize();
+
+      await GroupStore.instance.leaveGroup(
+        groupId: 'group-1',
+        newOwnerUserId: 'member-user',
+      );
+
+      expect(gateway.leaveGroupCalls, 1);
+      expect(gateway.leaveGroupNewOwnerUserId, 'member-user');
+    });
+
+    test('restores previous state when leave fails', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+      ];
+      await GroupStore.instance.initialize();
+      gateway.leaveGroupError = StateError('leave failed');
+
+      await expectLater(
+        GroupStore.instance.leaveGroup(groupId: 'group-1'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'leave failed',
+          ),
+        ),
+      );
+
+      expect(GroupStore.instance.value.groups.single.id, 'group-1');
+      expect(GroupStore.instance.value.isLeavingGroup, isFalse);
+      expect(
+        GroupStore.instance.value.errorMessage,
+        '그룹을 탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+    });
   });
 }
 
@@ -341,6 +432,32 @@ BuylogGroupMember _member() {
     displayName: '사용자',
     role: GroupRole.member,
     joinedAt: DateTime.parse('2026-05-26T10:21:30.000Z'),
+  );
+}
+
+BuylogGroup _groupWithMembers() {
+  return BuylogGroup(
+    id: 'group-1',
+    name: '우리 가족',
+    inviteCode: 'BUY-ABC123',
+    createdBy: 'owner-user',
+    createdAt: DateTime.parse('2026-05-27T00:00:00.000Z'),
+    members: [
+      BuylogGroupMember(
+        id: 'member-1',
+        userId: 'owner-user',
+        displayName: '소유자',
+        role: GroupRole.owner,
+        joinedAt: DateTime.parse('2026-05-27T00:00:00.000Z'),
+      ),
+      BuylogGroupMember(
+        id: 'member-2',
+        userId: 'member-user',
+        displayName: '멤버',
+        role: GroupRole.member,
+        joinedAt: DateTime.parse('2026-05-27T00:01:00.000Z'),
+      ),
+    ],
   );
 }
 
@@ -370,10 +487,14 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
   int loadGroupsForUserCalls = 0;
   int loadGroupMembersCalls = 0;
+  int leaveGroupCalls = 0;
   Object? loadDefaultGroupError;
   Object? loadGroupsForUserError;
   Object? loadGroupMembersError;
+  Object? leaveGroupError;
   String? loadGroupMembersGroupId;
+  String? leaveGroupGroupId;
+  String? leaveGroupNewOwnerUserId;
   Map<String, dynamic>? loadDefaultGroupResult;
   List<Map<String, dynamic>> loadGroupsForUserResult = const [];
   Map<String, dynamic>? createdGroupValues;
@@ -436,5 +557,18 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
       throw loadGroupMembersError!;
     }
     return loadGroupMembersResult;
+  }
+
+  @override
+  Future<void> leaveGroup({
+    required String groupId,
+    required String? newOwnerUserId,
+  }) async {
+    leaveGroupCalls += 1;
+    leaveGroupGroupId = groupId;
+    leaveGroupNewOwnerUserId = newOwnerUserId;
+    if (leaveGroupError != null) {
+      throw leaveGroupError!;
+    }
   }
 }

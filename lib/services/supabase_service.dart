@@ -46,6 +46,17 @@ class SupabaseService {
     debugPrint('[Supabase] 초기화 완료');
   }
 
+  @visibleForTesting
+  static List<Map<String, dynamic>> normalizePostgrestRows(Object? rows) {
+    if (rows is! Iterable) {
+      return const <Map<String, dynamic>>[];
+    }
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
+
   /// 현재 사용자 ID
   static String get currentUserId => _devUserId;
 
@@ -89,6 +100,24 @@ class SupabaseService {
     );
     return List<BuylogGroupMember>.unmodifiable(
       rows.map(BuylogGroupMember.fromSupabase),
+    );
+  }
+
+  static Future<void> leaveGroup({
+    required String groupId,
+    String? newOwnerUserId,
+  }) async {
+    final trimmedGroupId = groupId.trim();
+    if (trimmedGroupId.isEmpty) {
+      throw ArgumentError.value(groupId, 'groupId', 'Group id is required.');
+    }
+
+    final trimmedOwnerUserId = newOwnerUserId?.trim();
+    await _groupDatabaseGateway.leaveGroup(
+      groupId: trimmedGroupId,
+      newOwnerUserId: trimmedOwnerUserId?.isEmpty == true
+          ? null
+          : trimmedOwnerUserId,
     );
   }
 
@@ -310,6 +339,11 @@ abstract class GroupDatabaseGateway {
   Future<List<Map<String, dynamic>>> loadGroupMembers({
     required String groupId,
   });
+
+  Future<void> leaveGroup({
+    required String groupId,
+    required String? newOwnerUserId,
+  });
 }
 
 class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
@@ -368,10 +402,9 @@ class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
         .select('groups ($_groupProjection)')
         .eq('user_id', userId)
         .order('joined_at', ascending: true);
-    return rows
-        .whereType<Map<String, dynamic>>()
+    return SupabaseService.normalizePostgrestRows(rows)
         .map((row) => row['groups'])
-        .whereType<Map<String, dynamic>>()
+        .whereType<Map>()
         .map(Map<String, dynamic>.from)
         .toList(growable: false);
   }
@@ -400,10 +433,18 @@ class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
         .select(_memberProjection)
         .eq('group_id', groupId)
         .order('joined_at', ascending: true);
-    return rows
-        .whereType<Map<String, dynamic>>()
-        .map(Map<String, dynamic>.from)
-        .toList(growable: false);
+    return SupabaseService.normalizePostgrestRows(rows);
+  }
+
+  @override
+  Future<void> leaveGroup({
+    required String groupId,
+    required String? newOwnerUserId,
+  }) async {
+    await _client.rpc(
+      'leave_group',
+      params: {'target_group_id': groupId, 'new_owner_user_id': newOwnerUserId},
+    );
   }
 }
 
@@ -456,10 +497,7 @@ class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
       query = query.eq('user_id', userId!);
     }
     final rows = await query.order('created_at', ascending: false);
-    return rows
-        .whereType<Map<String, dynamic>>()
-        .map(Map<String, dynamic>.from)
-        .toList(growable: false);
+    return SupabaseService.normalizePostgrestRows(rows);
   }
 
   @override

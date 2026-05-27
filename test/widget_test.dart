@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -51,6 +53,26 @@ void main() {
     },
   );
 
+  test('loadEnvironmentForStartup ignores missing optional .env', () async {
+    await expectLater(
+      loadEnvironmentForStartup(fileName: 'missing-startup.env'),
+      completes,
+    );
+  });
+
+  test(
+    'loadEnvironmentForStartup does not block startup indefinitely',
+    () async {
+      await expectLater(
+        loadEnvironmentForStartup(
+          load: () => Completer<void>().future,
+          timeout: const Duration(milliseconds: 1),
+        ),
+        completes,
+      );
+    },
+  );
+
   testWidgets('App should render', (WidgetTester tester) async {
     // 앱을 렌더링합니다.
     await tester.pumpWidget(const BuylogApp());
@@ -84,5 +106,13 @@ class _ThrowingGroupDatabaseGateway implements GroupDatabaseGateway {
     required String groupId,
   }) {
     throw UnsupportedError('loadGroupMembers is not used in this test');
+  }
+
+  @override
+  Future<void> leaveGroup({
+    required String groupId,
+    required String? newOwnerUserId,
+  }) {
+    throw UnsupportedError('leaveGroup is not used in this test');
   }
 }

@@ -179,6 +179,87 @@ void main() {
     expect(find.text('멤버 1명'), findsOneWidget);
   });
 
+  testWidgets('member can confirm leaving a group', (tester) async {
+    final gateway = _FakeGroupDatabaseGateway();
+    SupabaseService.debugGroupDatabaseGateway = gateway;
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[
+        _group().copyWith(
+          members: [
+            BuylogGroupMember(
+              id: 'member-current',
+              userId: SupabaseService.currentUserId,
+              displayName: '나',
+              role: GroupRole.member,
+              joinedAt: DateTime.parse('2026-05-26T00:00:00.000Z'),
+            ),
+          ],
+        ),
+      ],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.tap(find.text('그룹 탈퇴'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: find.byType(AlertDialog), matching: find.text('탈퇴')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.leaveGroupCalls, 1);
+    expect(gateway.leaveGroupGroupId, 'group-1');
+    expect(gateway.leaveGroupNewOwnerUserId, isNull);
+  });
+
+  testWidgets('owner selects a new owner before leaving', (tester) async {
+    final gateway = _FakeGroupDatabaseGateway();
+    SupabaseService.debugGroupDatabaseGateway = gateway;
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.tap(find.text('그룹 탈퇴'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('멤버').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('위임 후 탈퇴'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.leaveGroupCalls, 1);
+    expect(gateway.leaveGroupNewOwnerUserId, 'user-2');
+  });
+
+  testWidgets('single owner can leave without another member', (tester) async {
+    final gateway = _FakeGroupDatabaseGateway();
+    SupabaseService.debugGroupDatabaseGateway = gateway;
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_singleOwnerGroup()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.tap(find.text('그룹 탈퇴'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: find.byType(AlertDialog), matching: find.text('탈퇴')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.leaveGroupCalls, 1);
+    expect(gateway.leaveGroupGroupId, 'group-1');
+    expect(gateway.leaveGroupNewOwnerUserId, isNull);
+  });
+
   testWidgets('reloads selected group items after a scoped save event', (
     WidgetTester tester,
   ) async {
@@ -223,7 +304,7 @@ BuylogGroup _group({String id = 'group-1', String name = '우리 가족'}) {
     members: [
       BuylogGroupMember(
         id: 'member-1',
-        userId: 'user-1',
+        userId: SupabaseService.currentUserId,
         displayName: '소유자',
         role: GroupRole.owner,
         joinedAt: DateTime.parse('2026-05-26T00:00:00.000Z'),
@@ -239,13 +320,35 @@ BuylogGroup _group({String id = 'group-1', String name = '우리 가족'}) {
   );
 }
 
+BuylogGroup _singleOwnerGroup() {
+  return BuylogGroup(
+    id: 'group-1',
+    name: '우리 가족',
+    inviteCode: 'BUY-ABC123',
+    createdBy: SupabaseService.currentUserId,
+    createdAt: DateTime.parse('2026-05-26T00:00:00.000Z'),
+    members: [
+      BuylogGroupMember(
+        id: 'member-1',
+        userId: SupabaseService.currentUserId,
+        displayName: '소유자',
+        role: GroupRole.owner,
+        joinedAt: DateTime.parse('2026-05-26T00:00:00.000Z'),
+      ),
+    ],
+  );
+}
+
 class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadDefaultGroupCalls = 0;
   int createGroupWithOwnerCalls = 0;
   int loadGroupMembersCalls = 0;
+  int leaveGroupCalls = 0;
   Map<String, dynamic>? createdGroupValues;
   Object? createGroupWithOwnerError;
   List<Map<String, dynamic>> loadGroupMembersResult = const [];
+  String? leaveGroupGroupId;
+  String? leaveGroupNewOwnerUserId;
   Map<String, dynamic>? _currentGroup;
 
   @override
@@ -288,6 +391,17 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
   }) async {
     loadGroupMembersCalls += 1;
     return loadGroupMembersResult;
+  }
+
+  @override
+  Future<void> leaveGroup({
+    required String groupId,
+    required String? newOwnerUserId,
+  }) async {
+    leaveGroupCalls += 1;
+    leaveGroupGroupId = groupId;
+    leaveGroupNewOwnerUserId = newOwnerUserId;
+    _currentGroup = null;
   }
 
   Future<void> insertGroupMember(Map<String, dynamic> values) async {}

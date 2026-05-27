@@ -12,6 +12,7 @@ class GroupState {
     this.isLoading = false,
     this.isSaving = false,
     this.isRefreshingMembers = false,
+    this.isLeavingGroup = false,
     this.errorMessage,
   });
 
@@ -23,6 +24,7 @@ class GroupState {
   final bool isLoading;
   final bool isSaving;
   final bool isRefreshingMembers;
+  final bool isLeavingGroup;
   final String? errorMessage;
 
   List<BuylogGroup> get visibleGroups {
@@ -55,6 +57,7 @@ class GroupState {
     bool? isLoading,
     bool? isSaving,
     bool? isRefreshingMembers,
+    bool? isLeavingGroup,
     Object? errorMessage = _unset,
   }) {
     final nextGroups = groups ?? this.groups;
@@ -69,6 +72,7 @@ class GroupState {
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
       isRefreshingMembers: isRefreshingMembers ?? this.isRefreshingMembers,
+      isLeavingGroup: isLeavingGroup ?? this.isLeavingGroup,
       errorMessage: identical(errorMessage, _unset)
           ? this.errorMessage
           : errorMessage as String?,
@@ -173,6 +177,51 @@ class GroupStore extends ValueNotifier<GroupState> {
       value = previousState.copyWith(
         isRefreshingMembers: false,
         errorMessage: '멤버 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> leaveGroup({
+    required String groupId,
+    String? newOwnerUserId,
+  }) async {
+    final trimmedGroupId = groupId.trim();
+    if (trimmedGroupId.isEmpty || value.isLeavingGroup) {
+      return;
+    }
+
+    final previousState = value;
+    value = previousState.copyWith(isLeavingGroup: true, errorMessage: null);
+
+    try {
+      await SupabaseService.leaveGroup(
+        groupId: trimmedGroupId,
+        newOwnerUserId: newOwnerUserId,
+      );
+      final groups = await SupabaseService.loadGroupsForUser();
+      final selectedScope =
+          previousState.selectedScope.isGroup &&
+              previousState.selectedScope.id == trimmedGroupId
+          ? const ItemScope.personal()
+          : previousState.selectedScope;
+      final availableScopes = <ItemScope>[
+        const ItemScope.personal(),
+        for (final group in groups)
+          ItemScope.group(id: group.id, label: group.name),
+      ];
+
+      value = GroupState(
+        group: groups.isEmpty ? null : groups.first,
+        groups: groups,
+        selectedScope: availableScopes.contains(selectedScope)
+            ? selectedScope
+            : const ItemScope.personal(),
+      );
+    } catch (_) {
+      value = previousState.copyWith(
+        isLeavingGroup: false,
+        errorMessage: '그룹을 탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.',
       );
       rethrow;
     }
