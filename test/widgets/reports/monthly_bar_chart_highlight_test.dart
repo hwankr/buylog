@@ -5,8 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:buylog/services/report_service.dart';
 import 'package:buylog/theme/app_theme.dart';
 import 'package:buylog/widgets/reports/monthly_bar_chart.dart';
+import 'package:buylog/widgets/reports/report_palette.dart';
 
-const _highlightColor = AppColors.primary;
+const _selectedColor = AppColors.primaryDark;
+const _latestColor = AppColors.primary;
+const _idleColor = ReportPalette.chartIdle;
+const _emptyColor = AppColors.surfaceAlt;
 
 List<MonthlySpending> _fixture() {
   return <MonthlySpending>[
@@ -41,20 +45,20 @@ List<Color?> _readBarColors(WidgetTester tester) {
 }
 
 void main() {
-  // monthly_bar_chart.dart:88 의 `final highlighted = isSelected || isLatest;`
-  // OR 동작을 spec-lock. PR2 는 monthly_bar_chart.dart 를 수정하지 않는다.
-  group('MonthlyBarChart highlight (isSelected || isLatest spec-lock)', () {
-    testWidgets('selectedMonth=null → 마지막 막대만 진한 색', (tester) async {
+  group('MonthlyBarChart highlight states', () {
+    testWidgets('selectedMonth=null → 마지막 막대는 latest, 나머지는 idle', (
+      tester,
+    ) async {
       await tester.pumpWidget(_wrap(MonthlyBarChart(data: _fixture())));
 
       final colors = _readBarColors(tester);
       expect(colors.length, 3);
-      expect(colors[0], isNot(_highlightColor));
-      expect(colors[1], isNot(_highlightColor));
-      expect(colors[2], _highlightColor);
+      expect(colors[0], _idleColor);
+      expect(colors[1], _idleColor);
+      expect(colors[2], _latestColor);
     });
 
-    testWidgets('selectedMonth=2026-01-01 (non-latest) → 1월과 3월 둘 다 진한 색', (
+    testWidgets('selectedMonth=2026-01-01 → 선택 막대와 최신 막대가 다른 색', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -67,12 +71,14 @@ void main() {
       );
 
       final colors = _readBarColors(tester);
-      expect(colors[0], _highlightColor);
-      expect(colors[1], isNot(_highlightColor));
-      expect(colors[2], _highlightColor);
+      expect(colors[0], _selectedColor);
+      expect(colors[1], _idleColor);
+      expect(colors[2], _latestColor);
     });
 
-    testWidgets('selectedMonth=2026-03-01 (latest) → 3월만 진한 색', (tester) async {
+    testWidgets('selectedMonth=latest → 선택 색이 latest 색보다 우선한다', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _wrap(
           MonthlyBarChart(
@@ -83,12 +89,12 @@ void main() {
       );
 
       final colors = _readBarColors(tester);
-      expect(colors[0], isNot(_highlightColor));
-      expect(colors[1], isNot(_highlightColor));
-      expect(colors[2], _highlightColor);
+      expect(colors[0], _idleColor);
+      expect(colors[1], _idleColor);
+      expect(colors[2], _selectedColor);
     });
 
-    testWidgets('highlightLatest=false → 선택 월만 진한 색', (tester) async {
+    testWidgets('highlightLatest=false → 선택 월만 selected 색', (tester) async {
       await tester.pumpWidget(
         _wrap(
           MonthlyBarChart(
@@ -100,9 +106,57 @@ void main() {
       );
 
       final colors = _readBarColors(tester);
-      expect(colors[0], _highlightColor);
-      expect(colors[1], isNot(_highlightColor));
-      expect(colors[2], isNot(_highlightColor));
+      expect(colors[0], _selectedColor);
+      expect(colors[1], _idleColor);
+      expect(colors[2], _idleColor);
     });
+
+    testWidgets('0원 막대는 surfaceAlt 색으로 표시한다', (tester) async {
+      final fixture = <MonthlySpending>[
+        MonthlySpending(
+          month: DateTime(2026, 1, 1),
+          totalAmount: 0,
+          byCategory: const {},
+          items: const [],
+        ),
+        MonthlySpending(
+          month: DateTime(2026, 2, 1),
+          totalAmount: 20000,
+          byCategory: const {'주방': 20000},
+          items: const [],
+        ),
+      ];
+
+      await tester.pumpWidget(_wrap(MonthlyBarChart(data: fixture)));
+
+      final colors = _readBarColors(tester);
+      expect(colors[0], _emptyColor);
+      expect(colors[1], _latestColor);
+    });
+  });
+
+  testWidgets('MonthlyBarChart shows y-axis labels and tooltip formatting', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(MonthlyBarChart(data: _fixture())));
+
+    final chart = tester.widget<BarChart>(find.byType(BarChart));
+
+    expect(chart.data.titlesData.leftTitles.sideTitles.showTitles, isTrue);
+    expect(chart.data.titlesData.leftTitles.sideTitles.reservedSize, 40);
+    expect(
+      chart.data.gridData.getDrawingHorizontalLine(50000).color,
+      ReportPalette.chartGrid,
+    );
+
+    final tooltip = chart.data.barTouchData.touchTooltipData.getTooltipItem(
+      chart.data.barGroups[1],
+      1,
+      chart.data.barGroups[1].barRods.first,
+      0,
+    );
+
+    expect(tooltip?.text, contains('2월'));
+    expect(tooltip?.text, contains('20,000원'));
   });
 }
