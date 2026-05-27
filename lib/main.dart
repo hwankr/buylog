@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -34,7 +36,21 @@ Future<void> bootstrapApp() async {
   await SupabaseService.initialize();
   await ItemStore.instance.initialize();
   await preloadGroupForStartup();
-  await dotenv.load(fileName: '.env');
+  unawaited(loadEnvironmentForStartup());
+}
+
+Future<void> loadEnvironmentForStartup({
+  String fileName = '.env',
+  Future<void> Function()? load,
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  try {
+    final loadEnv =
+        load ?? () => dotenv.load(fileName: fileName, isOptional: true);
+    await loadEnv().timeout(timeout);
+  } catch (error) {
+    debugPrint('[bootstrap] Environment load skipped: $error');
+  }
 }
 
 Future<void> preloadGroupForStartup() async {
