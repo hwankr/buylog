@@ -150,6 +150,165 @@ class ReportService {
         .toList();
   }
 
+  ReportPeriodSummary monthlySummary(DateTime month) {
+    final current = _aggregateMonth(_monthKey(month));
+    final previous = _aggregateMonth(DateTime(month.year, month.month - 1, 1));
+
+    return _summaryFrom(
+      totalAmount: current.totalAmount,
+      previousAmount: previous.totalAmount,
+      byCategory: current.byCategory,
+      purchaseCount: _purchaseCountForMonth(month),
+    );
+  }
+
+  ReportPeriodSummary yearlySummary(int year) {
+    final current = aggregateYear(year);
+    final previous = aggregateYear(year - 1);
+    final byCategory = <String, int>{};
+    var purchaseCount = 0;
+
+    for (final item in source) {
+      for (final purchase in item.purchaseHistory) {
+        if (purchase.date.year != year) continue;
+        purchaseCount++;
+        byCategory[item.category] =
+            (byCategory[item.category] ?? 0) + purchase.price;
+      }
+    }
+
+    return _summaryFrom(
+      totalAmount: current.totalAmount,
+      previousAmount: previous.totalAmount,
+      byCategory: byCategory,
+      purchaseCount: purchaseCount,
+    );
+  }
+
+  RefillForecast refillForecast() {
+    final items =
+        source
+            .where((item) => item.purchaseHistory.isNotEmpty)
+            .map(
+              (item) => RefillForecastItem(
+                item: item,
+                expectedPrice: item.purchaseHistory.first.price,
+                daysUntilRefill: item.daysRemaining < 0
+                    ? 0
+                    : item.daysRemaining,
+              ),
+            )
+            .where((entry) => entry.daysUntilRefill <= 90)
+            .toList()
+          ..sort((a, b) => a.daysUntilRefill.compareTo(b.daysUntilRefill));
+
+    int sumUntil(int days) => items
+        .where((entry) => entry.daysUntilRefill <= days)
+        .fold<int>(0, (sum, entry) => sum + entry.expectedPrice);
+
+    return RefillForecast(
+      next30DaysAmount: sumUntil(30),
+      next60DaysAmount: sumUntil(60),
+      next90DaysAmount: sumUntil(90),
+      items: items,
+    );
+  }
+
+  List<PriceMovement> priceMovements({int limit = 5}) {
+    final movements = <PriceMovement>[];
+
+    for (final item in source) {
+      if (item.purchaseHistory.length < 2) continue;
+      final sorted = List<PurchaseRecord>.from(item.purchaseHistory)
+        ..sort((a, b) => b.date.compareTo(a.date));
+      final current = sorted[0];
+      final previous = sorted[1];
+      if (current.price == previous.price) continue;
+
+      movements.add(
+        PriceMovement(
+          item: item,
+          currentPrice: current.price,
+          previousPrice: previous.price,
+          currentStore: current.store,
+          previousStore: previous.store,
+        ),
+      );
+    }
+
+    movements.sort(
+      (a, b) => b.deltaAmount.abs().compareTo(a.deltaAmount.abs()),
+    );
+    return movements.take(limit).toList();
+  }
+
+  List<ReportInsight> smartInsights({required DateTime month}) {
+    final summary = monthlySummary(month);
+    final forecast = refillForecast();
+    final movements = priceMovements(limit: 1);
+    final insights = <ReportInsight>[];
+
+    if (summary.deltaAmount != 0 && summary.hasPrevious) {
+      final direction = summary.deltaAmount > 0 ? '증가' : '감소';
+      insights.add(
+        ReportInsight(
+          kind: ReportInsightKind.spending,
+          title: '지출 흐름 변화',
+          body: '전월보다 ${summary.deltaAmount.abs()}원 $direction했어요.',
+          priority: 20,
+        ),
+      );
+    }
+
+    if (forecast.items.isNotEmpty) {
+      final next30Count = forecast.items
+          .where((entry) => entry.daysUntilRefill <= 30)
+          .length;
+      insights.add(
+        ReportInsight(
+          kind: ReportInsightKind.refill,
+          title: '다가오는 재구매',
+          body:
+              '30일 안에 $next30Count개 품목, 예상 ${forecast.next30DaysAmount}원이 필요해요.',
+          priority: 30,
+        ),
+      );
+    }
+
+    if (movements.isNotEmpty) {
+      final movement = movements.first;
+      final direction = movement.deltaAmount > 0 ? '올랐어요' : '내렸어요';
+      insights.add(
+        ReportInsight(
+          kind: ReportInsightKind.price,
+          title: '가격 변동 감지',
+          body:
+              '${movement.item.name} 가격이 직전 구매보다 ${movement.deltaAmount.abs()}원 $direction.',
+          priority: 10,
+        ),
+      );
+    }
+
+    insights.sort((a, b) => b.priority.compareTo(a.priority));
+    return insights.take(3).toList();
+  }
+
+  List<CategoryComparison> categoryComparisonForMonth(DateTime month) {
+    final currentKey = _monthKey(month);
+    final previousKey = DateTime(month.year, month.month - 1, 1);
+    return _categoryComparison(
+      includeCurrent: (date) => _monthKey(date) == currentKey,
+      includePrevious: (date) => _monthKey(date) == previousKey,
+    );
+  }
+
+  List<CategoryComparison> categoryComparisonForYear(int year) {
+    return _categoryComparison(
+      includeCurrent: (date) => date.year == year,
+      includePrevious: (date) => date.year == year - 1,
+    );
+  }
+
   MonthlySpending _aggregateMonth(DateTime bucket) {
     var total = 0;
     final byCategory = <String, int>{};
@@ -174,6 +333,77 @@ class ReportService {
       byCategory: byCategory,
       items: itemsInBucket,
     );
+  }
+
+  ReportPeriodSummary _summaryFrom({
+    required int totalAmount,
+    required int previousAmount,
+    required Map<String, int> byCategory,
+    required int purchaseCount,
+  }) {
+    final top = byCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return ReportPeriodSummary(
+      totalAmount: totalAmount,
+      previousAmount: previousAmount,
+      deltaAmount: totalAmount - previousAmount,
+      purchaseCount: purchaseCount,
+      topCategory: top.isEmpty ? null : top.first.key,
+      topCategoryAmount: top.isEmpty ? 0 : top.first.value,
+    );
+  }
+
+  int _purchaseCountForMonth(DateTime month) {
+    final key = _monthKey(month);
+    var count = 0;
+    for (final item in source) {
+      for (final purchase in item.purchaseHistory) {
+        if (_monthKey(purchase.date) == key) count++;
+      }
+    }
+    return count;
+  }
+
+  List<CategoryComparison> _categoryComparison({
+    required bool Function(DateTime date) includeCurrent,
+    required bool Function(DateTime date) includePrevious,
+  }) {
+    var total = 0;
+    final current = <String, int>{};
+    final previous = <String, int>{};
+    final purchaseCounts = <String, int>{};
+
+    for (final item in source) {
+      for (final purchase in item.purchaseHistory) {
+        if (includeCurrent(purchase.date)) {
+          total += purchase.price;
+          current[item.category] =
+              (current[item.category] ?? 0) + purchase.price;
+          purchaseCounts[item.category] =
+              (purchaseCounts[item.category] ?? 0) + 1;
+        }
+        if (includePrevious(purchase.date)) {
+          previous[item.category] =
+              (previous[item.category] ?? 0) + purchase.price;
+        }
+      }
+    }
+
+    if (total == 0) return const <CategoryComparison>[];
+
+    return current.entries
+        .map(
+          (entry) => CategoryComparison(
+            category: entry.key,
+            amount: entry.value,
+            previousAmount: previous[entry.key] ?? 0,
+            purchaseCount: purchaseCounts[entry.key] ?? 0,
+            ratio: entry.value / total,
+          ),
+        )
+        .toList()
+      ..sort((a, b) => b.amount.compareTo(a.amount));
   }
 }
 
@@ -211,4 +441,109 @@ class CategoryBreakdown {
     required this.amount,
     required this.ratio,
   });
+}
+
+class ReportPeriodSummary {
+  final int totalAmount;
+  final int previousAmount;
+  final int deltaAmount;
+  final int purchaseCount;
+  final String? topCategory;
+  final int topCategoryAmount;
+
+  const ReportPeriodSummary({
+    required this.totalAmount,
+    required this.previousAmount,
+    required this.deltaAmount,
+    required this.purchaseCount,
+    required this.topCategory,
+    required this.topCategoryAmount,
+  });
+
+  bool get hasPrevious => previousAmount > 0;
+
+  double? get deltaRatio {
+    if (previousAmount == 0) return null;
+    return deltaAmount / previousAmount;
+  }
+}
+
+class RefillForecast {
+  final int next30DaysAmount;
+  final int next60DaysAmount;
+  final int next90DaysAmount;
+  final List<RefillForecastItem> items;
+
+  const RefillForecast({
+    required this.next30DaysAmount,
+    required this.next60DaysAmount,
+    required this.next90DaysAmount,
+    required this.items,
+  });
+}
+
+class RefillForecastItem {
+  final ConsumableItem item;
+  final int expectedPrice;
+  final int daysUntilRefill;
+
+  const RefillForecastItem({
+    required this.item,
+    required this.expectedPrice,
+    required this.daysUntilRefill,
+  });
+}
+
+class PriceMovement {
+  final ConsumableItem item;
+  final int currentPrice;
+  final int previousPrice;
+  final String currentStore;
+  final String previousStore;
+
+  const PriceMovement({
+    required this.item,
+    required this.currentPrice,
+    required this.previousPrice,
+    required this.currentStore,
+    required this.previousStore,
+  });
+
+  int get deltaAmount => currentPrice - previousPrice;
+
+  double get deltaRatio => previousPrice == 0 ? 0 : deltaAmount / previousPrice;
+}
+
+enum ReportInsightKind { spending, refill, price }
+
+class ReportInsight {
+  final ReportInsightKind kind;
+  final String title;
+  final String body;
+  final int priority;
+
+  const ReportInsight({
+    required this.kind,
+    required this.title,
+    required this.body,
+    required this.priority,
+  });
+}
+
+class CategoryComparison {
+  final String category;
+  final int amount;
+  final int previousAmount;
+  final int purchaseCount;
+  final double ratio;
+
+  const CategoryComparison({
+    required this.category,
+    required this.amount,
+    required this.previousAmount,
+    required this.purchaseCount,
+    required this.ratio,
+  });
+
+  int get deltaAmount => amount - previousAmount;
 }

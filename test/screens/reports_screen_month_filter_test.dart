@@ -12,7 +12,7 @@ Future<void> _pumpReportsScreen(WidgetTester tester) async {
   // ReportsScreen 은 sliver 스택이 길어 기본 800x600 viewport 밖으로 밀리는
   // sliver 가 생긴다. SliverToBoxAdapter 의 lazy build 를 피하기 위해
   // viewport 를 충분히 키운다.
-  await tester.binding.setSurfaceSize(const Size(800, 2000));
+  await tester.binding.setSurfaceSize(const Size(800, 3200));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(_wrap());
 }
@@ -47,7 +47,20 @@ void main() {
   group('ReportsScreen month filter toggle', () {
     testWidgets('초기 상태: 상세 헤더 없음', (tester) async {
       await _pumpReportsScreen(tester);
+      expect(find.text('다가오는 재구매'), findsWidgets);
+      expect(find.text('가격 변동'), findsOneWidget);
       expect(find.textContaining('상세 내역'), findsNothing);
+    });
+
+    testWidgets('지출 추이 섹션이 카테고리 구성보다 먼저 보인다', (tester) async {
+      await _pumpReportsScreen(tester);
+
+      final trendTop = tester.getTopLeft(find.text('월별 지출 추이')).dy;
+      final categoryTop = tester
+          .getTopLeft(find.textContaining('월 카테고리 구성'))
+          .dy;
+
+      expect(trendTop, lessThan(categoryTop));
     });
 
     testWidgets('첫 탭 → 해당 월 헤더 표시', (tester) async {
