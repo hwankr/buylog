@@ -135,8 +135,8 @@ void main() {
 
     await tester.pumpWidget(_wrap());
 
-    expect(find.text('내 물품'), findsOneWidget);
-    expect(find.text('우리 가족'), findsOneWidget);
+    expect(find.text('내 물품'), findsNothing);
+    expect(find.text('우리 가족'), findsAtLeastNWidgets(1));
     expect(find.text('사무실'), findsOneWidget);
 
     await tester.tap(find.text('사무실'));
@@ -146,6 +146,51 @@ void main() {
       GroupStore.instance.value.selectedScope,
       const ItemScope.group(id: 'group-2', label: '사무실'),
     );
+  });
+
+  testWidgets('group page renders group tabs only and loads the first group', (
+    WidgetTester tester,
+  ) async {
+    final itemGateway = _RecordingItemDatabaseGateway()
+      ..loadItemsResult = <Map<String, dynamic>>[
+        _itemRow(id: 'group-item-1', groupId: 'group-1'),
+      ];
+    SupabaseService.debugItemDatabaseGateway = itemGateway;
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[
+        _group(id: 'group-1', name: '우리 가족'),
+        _group(id: 'group-2', name: '사무실'),
+      ],
+      selectedScope: const ItemScope.personal(),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+
+    expect(find.text('내 물품'), findsNothing);
+    expect(find.text('우리 가족'), findsAtLeastNWidgets(1));
+    expect(find.text('사무실'), findsOneWidget);
+    expect(itemGateway.lastUserId, isNull);
+    expect(itemGateway.lastGroupId, 'group-1');
+    expect(
+      GroupStore.instance.value.selectedScope,
+      const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+  });
+
+  testWidgets('empty group page does not render a personal item list', (
+    WidgetTester tester,
+  ) async {
+    SupabaseService.debugItemDatabaseGateway = _RecordingItemDatabaseGateway();
+    GroupStore.instance.value = const GroupState();
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+
+    expect(find.text('내 물품'), findsNothing);
+    expect(find.text('내 물품 목록'), findsNothing);
+    expect(find.text('그룹에 제품 추가'), findsNothing);
+    expect(find.text('그룹 만들기'), findsOneWidget);
   });
 
   testWidgets('member refresh button reloads and renders latest members', (
@@ -575,6 +620,8 @@ Map<String, dynamic> _itemRow({
 
 class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   int loadItemsCalls = 0;
+  String? lastUserId;
+  String? lastGroupId;
   List<Map<String, dynamic>> loadItemsResult = const [];
 
   @override
@@ -583,6 +630,8 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
     required String? groupId,
   }) async {
     loadItemsCalls += 1;
+    lastUserId = userId;
+    lastGroupId = groupId;
     return loadItemsResult;
   }
 
