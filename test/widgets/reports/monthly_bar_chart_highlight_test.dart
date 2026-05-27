@@ -76,9 +76,7 @@ void main() {
       expect(colors[2], _latestColor);
     });
 
-    testWidgets('selectedMonth=latest → 선택 색이 latest 색보다 우선한다', (
-      tester,
-    ) async {
+    testWidgets('selectedMonth=latest → 선택 색이 latest 색보다 우선한다', (tester) async {
       await tester.pumpWidget(
         _wrap(
           MonthlyBarChart(

@@ -14,16 +14,8 @@ void main() {
         home: Scaffold(
           body: CategoryPieChart(
             data: [
-              CategoryBreakdown(
-                category: '욕실/위생',
-                amount: 15000,
-                ratio: 0.6,
-              ),
-              CategoryBreakdown(
-                category: '주방/세제',
-                amount: 10000,
-                ratio: 0.4,
-              ),
+              CategoryBreakdown(category: '욕실/위생', amount: 15000, ratio: 0.6),
+              CategoryBreakdown(category: '주방/세제', amount: 10000, ratio: 0.4),
             ],
           ),
         ),
@@ -46,11 +38,7 @@ void main() {
         home: Scaffold(
           body: CategoryPieChart(
             data: [
-              CategoryBreakdown(
-                category: '새 카테고리',
-                amount: 1000,
-                ratio: 1,
-              ),
+              CategoryBreakdown(category: '새 카테고리', amount: 1000, ratio: 1),
             ],
           ),
         ),

@@ -6,8 +6,7 @@ import '../../theme/app_theme.dart';
 import 'report_palette.dart';
 
 /// 카테고리명 → 표시 색상. 매핑이 없으면 muted 색상으로 폴백.
-Color colorForCategory(String name) =>
-    ReportPalette.categoryColor(name);
+Color colorForCategory(String name) => ReportPalette.categoryColor(name);
 
 /// 카테고리별 지출 도넛 차트 + 범례.
 class CategoryPieChart extends StatelessWidget {

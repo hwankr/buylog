@@ -57,10 +57,7 @@ class _InsightCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: accent.withValues(alpha: 0.22),
-          width: 0.5,
-        ),
+        border: Border.all(color: accent.withValues(alpha: 0.22), width: 0.5),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
