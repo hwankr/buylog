@@ -248,7 +248,8 @@ class GroupStore extends ValueNotifier<GroupState> {
       );
       final groups = await SupabaseService.loadGroupsForUser();
       final remainingGroupScopes = <ItemScope>[
-        for (final group in groups) ItemScope.group(id: group.id, label: group.name),
+        for (final group in groups)
+          ItemScope.group(id: group.id, label: group.name),
       ];
       final selectedScope = _scopeAfterLeavingGroup(
         previousScope: previousState.selectedScope,

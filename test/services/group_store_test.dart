@@ -261,23 +261,26 @@ void main() {
       expect(groupScopes.any((scope) => scope.label == '내 물품'), isFalse);
     });
 
-    test('initialize selects the first joined group for the group page', () async {
-      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
-        _groupRow(id: 'group-1', name: '우리 가족'),
-        _groupRow(id: 'group-2', name: '사무실'),
-      ];
+    test(
+      'initialize selects the first joined group for the group page',
+      () async {
+        gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+          _groupRow(id: 'group-1', name: '우리 가족'),
+          _groupRow(id: 'group-2', name: '사무실'),
+        ];
 
-      await GroupStore.instance.initialize();
+        await GroupStore.instance.initialize();
 
-      expect(
-        GroupStore.instance.value.selectedScope,
-        const ItemScope.group(id: 'group-1', label: '우리 가족'),
-      );
-      expect(
-        GroupStore.instance.value.selectedGroupScope,
-        const ItemScope.group(id: 'group-1', label: '우리 가족'),
-      );
-    });
+        expect(
+          GroupStore.instance.value.selectedScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+        expect(
+          GroupStore.instance.value.selectedGroupScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+      },
+    );
 
     test(
       'selectedGroupScope falls back to the first group when selected scope is personal',
