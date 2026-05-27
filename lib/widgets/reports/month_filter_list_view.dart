@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/item.dart';
 import '../../services/report_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/price_format.dart';
 import 'category_pie_chart.dart';
 
 class MonthFilterListView extends StatelessWidget {
@@ -14,18 +15,6 @@ class MonthFilterListView extends StatelessWidget {
 
   final DateTime? selectedMonth;
   final ReportService service;
-
-  // TODO: 4번째 중복. 후속 이슈에서 lib/utils/price_format.dart 등으로 통합.
-  //   기존: reports_screen.dart:14, item_detail_screen.dart:12, item_card.dart:92.
-  String _formatPrice(int price) {
-    final str = price.toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buffer.write(',');
-      buffer.write(str[i]);
-    }
-    return '$buffer원';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -139,7 +128,7 @@ class MonthFilterListView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                _formatPrice(totalForMonth),
+                formatPrice(totalForMonth),
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
