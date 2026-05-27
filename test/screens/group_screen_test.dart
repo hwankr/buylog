@@ -7,6 +7,7 @@ import 'package:buylog/services/item_store.dart';
 import 'package:buylog/services/supabase_service.dart';
 import 'package:buylog/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -285,6 +286,94 @@ void main() {
 
     expect(itemGateway.loadItemsCalls, greaterThanOrEqualTo(2));
   });
+
+  testWidgets('renders dashboard counts for selected group items', (
+    WidgetTester tester,
+  ) async {
+    final itemGateway = _RecordingItemDatabaseGateway()
+      ..loadItemsResult = <Map<String, dynamic>>[
+        _itemRow(id: 'urgent', groupId: 'group-1', daysAgo: 29),
+        _itemRow(id: 'fresh', groupId: 'group-1', daysAgo: 1),
+      ];
+    SupabaseService.debugItemDatabaseGateway = itemGateway;
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+
+    expect(find.text('전체'), findsOneWidget);
+    expect(find.text('긴급'), findsOneWidget);
+    expect(find.text('곧'), findsOneWidget);
+    expect(find.text('여유'), findsOneWidget);
+    expect(find.text('전체 2'), findsOneWidget);
+    expect(find.text('긴급 1'), findsOneWidget);
+  });
+
+  testWidgets('copies group invite code from group card', (tester) async {
+    String? copiedText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            final args = call.arguments as Map<dynamic, dynamic>;
+            copiedText = args['text'] as String?;
+          }
+          return null;
+        });
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.tap(find.byTooltip('초대 코드 복사'));
+    await tester.pumpAndSettle();
+
+    expect(copiedText, 'BUY-ABC123');
+    expect(find.text('초대 코드가 복사되었습니다.'), findsOneWidget);
+  });
+
+  testWidgets('filter chip narrows visible group items without reloading', (
+    tester,
+  ) async {
+    final itemGateway = _RecordingItemDatabaseGateway()
+      ..loadItemsResult = <Map<String, dynamic>>[
+        _itemRow(id: 'urgent', groupId: 'group-1', daysAgo: 29),
+        _itemRow(id: 'soon', groupId: 'group-1', daysAgo: 1),
+      ];
+    SupabaseService.debugItemDatabaseGateway = itemGateway;
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+    await tester.ensureVisible(find.text('긴급 1'));
+    await tester.pump();
+    await tester.tap(find.text('긴급 1'));
+    await tester.pump();
+
+    expect(find.text('urgent'), findsOneWidget);
+    expect(find.text('soon'), findsNothing);
+    expect(itemGateway.loadItemsCalls, 1);
+  });
+
+  testWidgets('empty group item list shows add CTA', (tester) async {
+    SupabaseService.debugItemDatabaseGateway = _RecordingItemDatabaseGateway();
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+
+    expect(find.text('아직 이 그룹에 등록된 물품이 없습니다.'), findsOneWidget);
+    expect(find.text('그룹에 제품 추가'), findsOneWidget);
+  });
 }
 
 Widget _wrap() {
@@ -451,19 +540,35 @@ ConsumableItem _seedItem(String id) {
   );
 }
 
-Map<String, dynamic> _itemRow({required String id, String? groupId}) {
+Map<String, dynamic> _itemRow({
+  required String id,
+  String? groupId,
+  int daysAgo = 0,
+}) {
+  final purchaseDate = DateTime.now()
+      .subtract(Duration(days: daysAgo))
+      .toIso8601String()
+      .substring(0, 10);
+
   return <String, dynamic>{
     'id': id,
     'user_id': null,
     'group_id': groupId,
     'registered_by': SupabaseService.currentUserId,
-    'name': '세제',
+    'name': id,
     'brand': '브랜드',
     'image_url': null,
     'replacement_cycle_days': 30,
     'created_at': '2026-05-27T00:00:00.000Z',
     'categories': <String, dynamic>{'id': 'category-1', 'name': '주방/세제'},
-    'purchases': <Map<String, dynamic>>[],
+    'purchases': <Map<String, dynamic>>[
+      <String, dynamic>{
+        'id': 'purchase-$id',
+        'purchase_date': purchaseDate,
+        'price': 1000,
+        'store_name': '마트',
+      },
+    ],
     'ai_predictions': <Map<String, dynamic>>[],
   };
 }

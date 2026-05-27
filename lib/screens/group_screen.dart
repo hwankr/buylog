@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/group.dart';
 import '../models/item_scope.dart';
+import '../services/group_dashboard_summary.dart';
 import '../services/group_items_store.dart';
 import '../services/group_store.dart';
 import '../services/item_store.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/group/group_item_filter_chips.dart';
 import '../widgets/group/group_scoped_item_list.dart';
+import '../widgets/group/group_status_summary.dart';
 import '../widgets/group/item_scope_tabs.dart';
+import 'add_item_screen.dart';
 
 class GroupScreen extends StatefulWidget {
   const GroupScreen({super.key});
@@ -47,6 +52,20 @@ class _GroupScreenState extends State<GroupScreen> {
       return;
     }
     _itemsStore.load(event.scope);
+  }
+
+  Future<void> _copyInviteCode(String inviteCode) async {
+    await Clipboard.setData(ClipboardData(text: inviteCode));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('초대 코드가 복사되었습니다.')));
+  }
+
+  void _openScopedAdd(ItemScope scope) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => AddItemScreen(targetScope: scope)),
+    );
   }
 
   @override
@@ -89,6 +108,7 @@ class _GroupScreenState extends State<GroupScreen> {
                       isLeavingGroup: state.isLeavingGroup,
                       onRefreshMembers: () => GroupStore.instance
                           .refreshMembers(groupId: selectedGroup.id),
+                      onCopyInviteCode: _copyInviteCode,
                     ),
                   )
                 else if (state.visibleGroups.isEmpty)
@@ -106,8 +126,41 @@ class _GroupScreenState extends State<GroupScreen> {
                 ),
                 ValueListenableBuilder<GroupItemsState>(
                   valueListenable: _itemsStore,
-                  builder: (context, itemState, _) =>
-                      GroupScopedItemList(state: itemState),
+                  builder: (context, itemState, _) {
+                    final summary = GroupDashboardSummaryBuilder.build(
+                      scope: itemState.scope,
+                      items: itemState.items,
+                      selectedFilter: itemState.selectedFilter,
+                    );
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                          child: GroupStatusSummary(summary: summary),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: GroupItemFilterChips(
+                            summary: summary,
+                            onSelected: _itemsStore.selectFilter,
+                          ),
+                        ),
+                        GroupScopedItemList(
+                          items: summary.filteredItems,
+                          isLoading: itemState.isLoading,
+                          errorMessage: itemState.errorMessage,
+                          emptyMessage: summary.scope.isGroup
+                              ? '아직 이 그룹에 등록된 물품이 없습니다.'
+                              : '표시할 내 물품이 없습니다.',
+                          emptyActionLabel: summary.scope.isGroup
+                              ? '그룹에 제품 추가'
+                              : '내 물품 추가',
+                          onEmptyAction: () => _openScopedAdd(summary.scope),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -205,12 +258,14 @@ class _GroupCard extends StatelessWidget {
     required this.isRefreshingMembers,
     required this.isLeavingGroup,
     required this.onRefreshMembers,
+    required this.onCopyInviteCode,
   });
 
   final BuylogGroup group;
   final bool isRefreshingMembers;
   final bool isLeavingGroup;
   final VoidCallback onRefreshMembers;
+  final ValueChanged<String> onCopyInviteCode;
 
   @override
   Widget build(BuildContext context) {
@@ -253,16 +308,27 @@ class _GroupCard extends StatelessWidget {
           const SizedBox(height: 20),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.fromLTRB(16, 8, 6, 8),
             decoration: BoxDecoration(
               color: AppColors.surfaceAlt,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(
-              '초대 코드: ${group.inviteCode}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '초대 코드: ${group.inviteCode}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                IconButton(
+                  tooltip: '초대 코드 복사',
+                  onPressed: () => onCopyInviteCode(group.inviteCode),
+                  icon: const Icon(Icons.copy, size: 18),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),

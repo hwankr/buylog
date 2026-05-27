@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:buylog/services/group_items_store.dart';
+import 'package:buylog/services/group_dashboard_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:buylog/models/item_scope.dart';
@@ -101,6 +102,19 @@ void main() {
       await firstLoad;
     },
   );
+
+  test('selectFilter updates filter without reloading items', () async {
+    gateway.loadItemsResult = <Map<String, dynamic>>[
+      _itemRow(id: 'item-1', groupId: 'group-1'),
+    ];
+
+    await store.load(const ItemScope.group(id: 'group-1', label: '우리 가족'));
+    store.selectFilter(GroupItemFilter.urgent);
+
+    expect(store.value.selectedFilter, GroupItemFilter.urgent);
+    expect(store.value.items.single.id, 'item-1');
+    expect(gateway.loadItemsCalls, 1);
+  });
 }
 
 Map<String, dynamic> _itemRow({
