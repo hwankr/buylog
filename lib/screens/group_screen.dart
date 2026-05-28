@@ -10,11 +10,13 @@ import '../services/item_store.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/group/group_item_filter_chips.dart';
+import '../widgets/group/group_quick_actions.dart';
 import '../widgets/group/group_scoped_item_list.dart';
 import '../widgets/group/group_settings_dialog.dart';
 import '../widgets/group/group_status_summary.dart';
 import '../widgets/group/item_scope_tabs.dart';
 import 'add_item_screen.dart';
+import 'scan_screen.dart';
 
 class GroupScreen extends StatefulWidget {
   const GroupScreen({super.key});
@@ -30,43 +32,63 @@ class _GroupScreenState extends State<GroupScreen> {
   void initState() {
     super.initState();
     _itemsStore = GroupItemsStore();
-    GroupStore.instance.addListener(_reloadForSelectedGroup);
+    GroupStore.instance.addListener(_syncSelectedGroupItems);
+    _syncSelectedGroupItems();
     ItemStore.instance.lastSaveEvent.addListener(_reloadAfterScopedSave);
-    _reloadForSelectedGroup();
   }
 
   @override
   void dispose() {
-    GroupStore.instance.removeListener(_reloadForSelectedGroup);
+    GroupStore.instance.removeListener(_syncSelectedGroupItems);
     ItemStore.instance.lastSaveEvent.removeListener(_reloadAfterScopedSave);
     _itemsStore.dispose();
     super.dispose();
   }
 
-  void _selectScope(ItemScope scope) {
-    if (!scope.isGroup) return;
-    GroupStore.instance.selectScope(scope);
-  }
-
-  void _reloadForSelectedGroup() {
-    final scope = GroupStore.instance.value.selectedGroupScope;
-    if (scope == null) return;
-    if (_itemsStore.value.scope.storageKey == scope.storageKey &&
-        !_itemsStore.value.isLoading) {
+  void _syncSelectedGroupItems() {
+    final selectedGroupScope = GroupStore.instance.value.selectedGroupScope;
+    if (selectedGroupScope == null) {
       return;
     }
-    _itemsStore.load(scope);
+
+    final selectedScope = GroupStore.instance.value.selectedScope;
+    if (selectedScope.storageKey != selectedGroupScope.storageKey) {
+      if (_itemsStore.value.scope.storageKey != selectedGroupScope.storageKey) {
+        _itemsStore.load(selectedGroupScope);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final currentState = GroupStore.instance.value;
+        if (currentState.selectedScope.storageKey !=
+            selectedGroupScope.storageKey) {
+          GroupStore.instance.selectScope(selectedGroupScope);
+        }
+      });
+      return;
+    }
+
+    if (_itemsStore.value.scope.storageKey != selectedGroupScope.storageKey) {
+      _itemsStore.load(selectedGroupScope);
+    }
+  }
+
+  void _selectScope(ItemScope scope) {
+    if (!scope.isGroup) {
+      return;
+    }
+    GroupStore.instance.selectScope(scope);
   }
 
   void _reloadAfterScopedSave() {
     final event = ItemStore.instance.lastSaveEvent.value;
-    final selectedScope = GroupStore.instance.value.selectedGroupScope;
+    final selectedGroupScope = GroupStore.instance.value.selectedGroupScope;
     if (event == null ||
-        selectedScope == null ||
-        event.scope.storageKey != selectedScope.storageKey) {
+        selectedGroupScope == null ||
+        !event.scope.isGroup ||
+        event.scope.storageKey != selectedGroupScope.storageKey) {
       return;
     }
-    _itemsStore.load(selectedScope);
+    _itemsStore.load(selectedGroupScope);
   }
 
   Future<void> _copyInviteCode(String inviteCode) async {
@@ -80,6 +102,42 @@ class _GroupScreenState extends State<GroupScreen> {
   void _openScopedAdd(ItemScope scope) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => AddItemScreen(targetScope: scope)),
+    );
+  }
+
+  void _openScopedScan(ItemScope scope) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (scanContext) => Scaffold(
+          backgroundColor: AppColors.background,
+          body: Stack(
+            children: [
+              ScanScreen(targetScope: scope),
+              Positioned(
+                top: MediaQuery.of(scanContext).padding.top + 8,
+                right: 12,
+                child: Material(
+                  color: AppColors.surface,
+                  shape: const CircleBorder(),
+                  elevation: 1,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    color: AppColors.text,
+                    onPressed: () => Navigator.of(scanContext).pop(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openCreateGroupDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => const _CreateGroupDialog(),
     );
   }
 
@@ -139,8 +197,10 @@ class _GroupScreenState extends State<GroupScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final selectedScope = state.selectedGroupScope;
-          final selectedGroup = state.selectedGroup;
+          final selectedGroupScope = state.selectedGroupScope;
+          final selectedGroup = selectedGroupScope == null
+              ? null
+              : state.groupForScope(selectedGroupScope);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(0, 20, 0, 24),
@@ -155,49 +215,59 @@ class _GroupScreenState extends State<GroupScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                if (state.availableGroupScopes.length > 1) ...[
-                  ItemScopeTabs(
-                    scopes: state.availableGroupScopes,
-                    selectedScope:
-                        selectedScope ?? state.availableGroupScopes.first,
-                    onSelected: _selectScope,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                if (selectedGroup != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _GroupCard(
-                      group: selectedGroup,
-                      isRefreshingMembers: state.isRefreshingMembers,
-                      isLeavingGroup: state.isLeavingGroup,
-                      isUpdatingGroup: state.isUpdatingGroup,
-                      onRefreshMembers: () => GroupStore.instance
-                          .refreshMembers(groupId: selectedGroup.id),
-                      onCopyInviteCode: _copyInviteCode,
-                      onOpenSettings: () => _openGroupSettings(selectedGroup),
-                    ),
-                  )
-                else
+                if (state.visibleGroups.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _EmptyGroupState(errorMessage: state.errorMessage),
+                  )
+                else ...[
+                  ItemScopeTabs(
+                    scopes: state.groupScopes,
+                    selectedScope: selectedGroupScope!,
+                    onSelected: _selectScope,
                   ),
-                if (selectedScope != null && selectedGroup != null) ...[
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: GroupQuickActions(
+                      onAddItem: () => _openScopedAdd(selectedGroupScope),
+                      onScanReceipt: () => _openScopedScan(selectedGroupScope),
+                      onCreateGroup: _openCreateGroupDialog,
+                      isCreateGroupDisabled: state.isSaving,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (selectedGroup != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _GroupCard(
+                        group: selectedGroup,
+                        isRefreshingMembers: state.isRefreshingMembers,
+                        isLeavingGroup: state.isLeavingGroup,
+                        isUpdatingGroup: state.isUpdatingGroup,
+                        onRefreshMembers: () => GroupStore.instance
+                            .refreshMembers(groupId: selectedGroup.id),
+                        onCopyInviteCode: _copyInviteCode,
+                        onOpenSettings: () => _openGroupSettings(selectedGroup),
+                      ),
+                    ),
                   const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Text(
-                      '${selectedScope.label} 목록',
+                      '${selectedGroupScope.label} 목록',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
                   ValueListenableBuilder<GroupItemsState>(
                     valueListenable: _itemsStore,
                     builder: (context, itemState, _) {
+                      final isSelectedItemScope =
+                          itemState.scope.storageKey ==
+                          selectedGroupScope.storageKey;
                       final summary = GroupDashboardSummaryBuilder.build(
-                        scope: itemState.scope,
-                        items: itemState.items,
+                        scope: selectedGroupScope,
+                        items: isSelectedItemScope ? itemState.items : const [],
                         selectedFilter: itemState.selectedFilter,
                       );
                       return Column(
@@ -216,11 +286,15 @@ class _GroupScreenState extends State<GroupScreen> {
                           ),
                           GroupScopedItemList(
                             items: summary.filteredItems,
-                            isLoading: itemState.isLoading,
-                            errorMessage: itemState.errorMessage,
+                            isLoading:
+                                itemState.isLoading && isSelectedItemScope,
+                            errorMessage: isSelectedItemScope
+                                ? itemState.errorMessage
+                                : null,
                             emptyMessage: '아직 이 그룹에 등록된 물품이 없습니다.',
                             emptyActionLabel: '그룹에 제품 추가',
-                            onEmptyAction: () => _openScopedAdd(selectedScope),
+                            onEmptyAction: () =>
+                                _openScopedAdd(selectedGroupScope),
                           ),
                         ],
                       );

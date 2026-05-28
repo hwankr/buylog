@@ -44,19 +44,25 @@ class GroupState {
     ];
   }
 
-  List<ItemScope> get availableGroupScopes {
+  List<ItemScope> get groupScopes {
     return <ItemScope>[
       for (final group in visibleGroups)
         ItemScope.group(id: group.id, label: group.name),
     ];
   }
 
+  List<ItemScope> get availableGroupScopes => groupScopes;
+
   ItemScope? get selectedGroupScope {
-    if (selectedScope.isGroup &&
-        availableGroupScopes.any((scope) => scope == selectedScope)) {
-      return selectedScope;
+    final scopes = groupScopes;
+    if (selectedScope.isGroup) {
+      for (final scope in scopes) {
+        if (scope.id == selectedScope.id) {
+          return scope;
+        }
+      }
     }
-    return availableGroupScopes.isEmpty ? null : availableGroupScopes.first;
+    return scopes.isEmpty ? null : scopes.first;
   }
 
   BuylogGroup? get selectedGroup {
@@ -121,6 +127,7 @@ class GroupStore extends ValueNotifier<GroupState> {
       value = GroupState(
         group: groups.isEmpty ? null : groups.first,
         groups: groups,
+        selectedScope: _firstGroupScopeOrPersonal(groups),
       );
     } catch (_) {
       _initialized = false;
@@ -221,6 +228,33 @@ class GroupStore extends ValueNotifier<GroupState> {
     value = value.copyWith(selectedScope: scope, errorMessage: null);
   }
 
+  ItemScope _firstGroupScopeOrPersonal(List<BuylogGroup> groups) {
+    if (groups.isEmpty) {
+      return const ItemScope.personal();
+    }
+    final first = groups.first;
+    return ItemScope.group(id: first.id, label: first.name);
+  }
+
+  ItemScope _scopeAfterLeavingGroup({
+    required ItemScope previousScope,
+    required String removedGroupId,
+    required List<ItemScope> remainingGroupScopes,
+  }) {
+    if (previousScope.isGroup && previousScope.id != removedGroupId) {
+      for (final scope in remainingGroupScopes) {
+        if (scope.id == previousScope.id) {
+          return scope;
+        }
+      }
+    }
+
+    if (remainingGroupScopes.isEmpty) {
+      return const ItemScope.personal();
+    }
+    return remainingGroupScopes.first;
+  }
+
   Future<void> refreshMembers({String? groupId}) async {
     final currentGroup = groupId == null
         ? value.group
@@ -276,18 +310,15 @@ class GroupStore extends ValueNotifier<GroupState> {
         newOwnerUserId: newOwnerUserId,
       );
       final groups = await SupabaseService.loadGroupsForUser();
-      final remainingScopes = <ItemScope>[
+      final remainingGroupScopes = <ItemScope>[
         for (final group in groups)
           ItemScope.group(id: group.id, label: group.name),
       ];
-      final previousSelectedStillExists = remainingScopes.any(
-        (scope) => scope == previousState.selectedScope,
+      final selectedScope = _scopeAfterLeavingGroup(
+        previousScope: previousState.selectedScope,
+        removedGroupId: trimmedGroupId,
+        remainingGroupScopes: remainingGroupScopes,
       );
-      final selectedScope = previousSelectedStillExists
-          ? previousState.selectedScope
-          : remainingScopes.isEmpty
-          ? const ItemScope.personal()
-          : remainingScopes.first;
 
       value = GroupState(
         group: groups.isEmpty ? null : groups.first,

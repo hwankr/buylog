@@ -231,6 +231,32 @@ void main() {
       expect(gateway.loadDefaultGroupCalls, 0);
     });
 
+    test(
+      'createGroup appends a new group and selects it when groups already exist',
+      () async {
+        GroupStore.instance.value = GroupState(
+          groups: <BuylogGroup>[_groupWithMembers()],
+          selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+        gateway.nextCreatedGroupId = 'group-2';
+
+        await GroupStore.instance.createGroup('사무실');
+
+        expect(GroupStore.instance.value.groups.map((group) => group.name), [
+          '우리 가족',
+          '사무실',
+        ]);
+        expect(
+          GroupStore.instance.value.selectedScope,
+          const ItemScope.group(id: 'group-2', label: '사무실'),
+        );
+        expect(
+          GroupStore.instance.value.selectedGroupScope,
+          const ItemScope.group(id: 'group-2', label: '사무실'),
+        );
+      },
+    );
+
     test('builds personal and joined group scopes after initialize', () async {
       gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
         _groupRow(id: 'group-1', name: '우리 가족'),
@@ -243,9 +269,68 @@ void main() {
       expect(scopes.map((scope) => scope.label), ['내 물품', '우리 가족', '사무실']);
       expect(
         GroupStore.instance.value.selectedScope,
-        const ItemScope.personal(),
+        const ItemScope.group(id: 'group-1', label: '우리 가족'),
       );
     });
+
+    test('exposes joined groups as group-only scopes', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+
+      await GroupStore.instance.initialize();
+
+      final groupScopes = GroupStore.instance.value.groupScopes;
+      expect(groupScopes.map((scope) => scope.label), ['우리 가족', '사무실']);
+      expect(groupScopes.every((scope) => scope.isGroup), isTrue);
+      expect(groupScopes.any((scope) => scope.label == '내 물품'), isFalse);
+    });
+
+    test(
+      'initialize selects the first joined group for the group page',
+      () async {
+        gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+          _groupRow(id: 'group-1', name: '우리 가족'),
+          _groupRow(id: 'group-2', name: '사무실'),
+        ];
+
+        await GroupStore.instance.initialize();
+
+        expect(
+          GroupStore.instance.value.selectedScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+        expect(
+          GroupStore.instance.value.selectedGroupScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+      },
+    );
+
+    test(
+      'selectedGroupScope falls back to the first group when selected scope is personal',
+      () {
+        GroupStore.instance.value = GroupState(
+          groups: <BuylogGroup>[
+            _groupWithMembers(),
+            BuylogGroup(
+              id: 'group-2',
+              name: '사무실',
+              inviteCode: 'BUY-OFFICE',
+              createdBy: 'owner-user',
+              createdAt: DateTime.parse('2026-05-27T00:00:00.000Z'),
+            ),
+          ],
+          selectedScope: const ItemScope.personal(),
+        );
+
+        expect(
+          GroupStore.instance.value.selectedGroupScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+      },
+    );
 
     test('selectScope switches to a joined group scope', () async {
       gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
@@ -285,7 +370,7 @@ void main() {
 
         expect(
           GroupStore.instance.value.selectedScope,
-          const ItemScope.personal(),
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
         );
         expect(
           GroupStore.instance.value.selectedGroupScope,
@@ -503,7 +588,7 @@ void main() {
       expect(GroupStore.instance.value.errorMessage, isNull);
     });
 
-    test('selects the next group after leaving the selected group', () async {
+    test('leaves selected group and selects next remaining group', () async {
       gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
         _groupRow(id: 'group-1', name: '우리 가족'),
         _groupRow(id: 'group-2', name: '사무실'),
@@ -650,6 +735,7 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   Map<String, dynamic>? createdGroupValues;
   Object? createGroupWithOwnerError;
   List<Map<String, dynamic>> loadGroupMembersResult = const [];
+  String nextCreatedGroupId = 'group-1';
 
   @override
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
@@ -688,7 +774,7 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
       'invite_code': inviteCode,
     };
     return <String, dynamic>{
-      'id': 'group-1',
+      'id': nextCreatedGroupId,
       'name': name,
       'invite_code': inviteCode,
       'created_by': SupabaseService.currentUserId,

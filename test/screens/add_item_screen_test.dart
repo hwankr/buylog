@@ -123,6 +123,21 @@ void main() {
     expect(gateway.upsertedItemPayload?['user_id'], isNull);
     expect(gateway.upsertedItemPayload?['group_id'], 'group-1');
   });
+
+  testWidgets('shows the target group while adding a group item', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: const AddItemScreen(
+          targetScope: ItemScope.group(id: 'group-1', label: '우리 가족'),
+        ),
+      ),
+    );
+
+    expect(find.text('우리 가족에 추가 중'), findsOneWidget);
+  });
 }
 
 Widget _wrap(Widget child) {

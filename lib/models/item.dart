@@ -170,10 +170,12 @@ class PriceComparison {
   final String store;
   final int price;
   final bool isLowest;
+  final String? link;
 
   const PriceComparison({
     required this.store,
     required this.price,
     this.isLowest = false,
+    this.link,
   });
 }
