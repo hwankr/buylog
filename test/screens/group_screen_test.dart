@@ -123,7 +123,7 @@ void main() {
     expect(find.text('관리자'), findsOneWidget);
   });
 
-  testWidgets('renders scope tabs and switches selected group tab', (
+  testWidgets('renders group scope tabs and switches selected group tab', (
     WidgetTester tester,
   ) async {
     GroupStore.instance.value = GroupState(
@@ -135,8 +135,8 @@ void main() {
 
     await tester.pumpWidget(_wrap());
 
-    expect(find.text('내 물품'), findsOneWidget);
-    expect(find.text('우리 가족'), findsOneWidget);
+    expect(find.text('내 물품'), findsNothing);
+    expect(find.text('우리 가족'), findsAtLeastNWidgets(1));
     expect(find.text('사무실'), findsOneWidget);
 
     await tester.tap(find.text('사무실'));
@@ -147,6 +147,58 @@ void main() {
       const ItemScope.group(id: 'group-2', label: '사무실'),
     );
   });
+
+  testWidgets('group screen hides personal item tab and personal item list', (
+    tester,
+  ) async {
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group(id: 'group-1', name: '우리 가족')],
+      selectedScope: const ItemScope.personal(),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+
+    expect(find.text('내 물품'), findsNothing);
+    expect(find.text('내 물품 목록'), findsNothing);
+    expect(find.text('우리 가족'), findsAtLeastNWidgets(1));
+    expect(find.text('우리 가족 목록'), findsOneWidget);
+  });
+
+  testWidgets(
+    'group screen loads first group items when selected scope is personal',
+    (tester) async {
+      final itemGateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'group-item-1', groupId: 'group-1'),
+        ];
+      SupabaseService.debugItemDatabaseGateway = itemGateway;
+      GroupStore.instance.value = GroupState(
+        groups: <BuylogGroup>[_group(id: 'group-1', name: '우리 가족')],
+        selectedScope: const ItemScope.personal(),
+      );
+
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+
+      expect(itemGateway.lastUserId, isNull);
+      expect(itemGateway.lastGroupId, 'group-1');
+      expect(find.text('group-item-1'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'empty group state does not render item dashboard or list heading',
+    (tester) async {
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+
+      expect(find.text('그룹'), findsOneWidget);
+      expect(find.text('아직 연결된 그룹이 없습니다.'), findsOneWidget);
+      expect(find.text('전체'), findsNothing);
+      expect(find.textContaining('목록'), findsNothing);
+    },
+  );
 
   testWidgets('member refresh button reloads and renders latest members', (
     WidgetTester tester,
@@ -575,6 +627,8 @@ Map<String, dynamic> _itemRow({
 
 class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   int loadItemsCalls = 0;
+  String? lastUserId;
+  String? lastGroupId;
   List<Map<String, dynamic>> loadItemsResult = const [];
 
   @override
@@ -583,6 +637,8 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
     required String? groupId,
   }) async {
     loadItemsCalls += 1;
+    lastUserId = userId;
+    lastGroupId = groupId;
     return loadItemsResult;
   }
 

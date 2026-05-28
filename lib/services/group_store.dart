@@ -42,6 +42,26 @@ class GroupState {
     ];
   }
 
+  List<ItemScope> get availableGroupScopes {
+    return <ItemScope>[
+      for (final group in visibleGroups)
+        ItemScope.group(id: group.id, label: group.name),
+    ];
+  }
+
+  ItemScope? get selectedGroupScope {
+    if (selectedScope.isGroup &&
+        availableGroupScopes.any((scope) => scope == selectedScope)) {
+      return selectedScope;
+    }
+    return availableGroupScopes.isEmpty ? null : availableGroupScopes.first;
+  }
+
+  BuylogGroup? get selectedGroup {
+    final scope = selectedGroupScope;
+    return scope == null ? null : groupForScope(scope);
+  }
+
   BuylogGroup? groupForScope(ItemScope scope) {
     if (!scope.isGroup) return null;
     for (final group in visibleGroups) {
@@ -200,23 +220,23 @@ class GroupStore extends ValueNotifier<GroupState> {
         newOwnerUserId: newOwnerUserId,
       );
       final groups = await SupabaseService.loadGroupsForUser();
-      final selectedScope =
-          previousState.selectedScope.isGroup &&
-              previousState.selectedScope.id == trimmedGroupId
-          ? const ItemScope.personal()
-          : previousState.selectedScope;
-      final availableScopes = <ItemScope>[
-        const ItemScope.personal(),
+      final remainingScopes = <ItemScope>[
         for (final group in groups)
           ItemScope.group(id: group.id, label: group.name),
       ];
+      final previousSelectedStillExists = remainingScopes.any(
+        (scope) => scope == previousState.selectedScope,
+      );
+      final selectedScope = previousSelectedStillExists
+          ? previousState.selectedScope
+          : remainingScopes.isEmpty
+          ? const ItemScope.personal()
+          : remainingScopes.first;
 
       value = GroupState(
         group: groups.isEmpty ? null : groups.first,
         groups: groups,
-        selectedScope: availableScopes.contains(selectedScope)
-            ? selectedScope
-            : const ItemScope.personal(),
+        selectedScope: selectedScope,
       );
     } catch (_) {
       value = previousState.copyWith(

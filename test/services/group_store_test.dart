@@ -260,6 +260,59 @@ void main() {
       expect(GroupStore.instance.value.selectedScope.label, '우리 가족');
     });
 
+    test('exposes group-only scopes without the personal scope', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+
+      await GroupStore.instance.initialize();
+
+      final scopes = GroupStore.instance.value.availableGroupScopes;
+      expect(scopes.map((scope) => scope.label), ['우리 가족', '사무실']);
+      expect(scopes.every((scope) => scope.isGroup), isTrue);
+    });
+
+    test(
+      'uses the first joined group as selectedGroupScope fallback',
+      () async {
+        gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+          _groupRow(id: 'group-1', name: '우리 가족'),
+          _groupRow(id: 'group-2', name: '사무실'),
+        ];
+
+        await GroupStore.instance.initialize();
+
+        expect(
+          GroupStore.instance.value.selectedScope,
+          const ItemScope.personal(),
+        );
+        expect(
+          GroupStore.instance.value.selectedGroupScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+        expect(GroupStore.instance.value.selectedGroup?.id, 'group-1');
+      },
+    );
+
+    test('keeps the selected joined group as selectedGroupScope', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+      await GroupStore.instance.initialize();
+
+      GroupStore.instance.selectScope(
+        const ItemScope.group(id: 'group-2', label: '사무실'),
+      );
+
+      expect(
+        GroupStore.instance.value.selectedGroupScope,
+        const ItemScope.group(id: 'group-2', label: '사무실'),
+      );
+      expect(GroupStore.instance.value.selectedGroup?.id, 'group-2');
+    });
+
     test(
       'restores previous state and sets Korean error message when creation fails',
       () async {
@@ -376,10 +429,35 @@ void main() {
       ]);
       expect(
         GroupStore.instance.value.selectedScope,
-        const ItemScope.personal(),
+        const ItemScope.group(id: 'group-2', label: '사무실'),
       );
       expect(GroupStore.instance.value.isLeavingGroup, isFalse);
       expect(GroupStore.instance.value.errorMessage, isNull);
+    });
+
+    test('selects the next group after leaving the selected group', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+      await GroupStore.instance.initialize();
+      GroupStore.instance.selectScope(
+        const ItemScope.group(id: 'group-1', label: '우리 가족'),
+      );
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+
+      await GroupStore.instance.leaveGroup(groupId: 'group-1');
+
+      expect(
+        GroupStore.instance.value.selectedScope,
+        const ItemScope.group(id: 'group-2', label: '사무실'),
+      );
+      expect(
+        GroupStore.instance.value.selectedGroupScope,
+        const ItemScope.group(id: 'group-2', label: '사무실'),
+      );
     });
 
     test('passes owner delegation user id when leaving as owner', () async {

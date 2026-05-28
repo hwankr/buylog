@@ -117,13 +117,8 @@ class MainNavigationState extends State<MainNavigation> {
       return const ItemScope.personal();
     }
 
-    final state = GroupStore.instance.value;
-    final scope = state.selectedScope;
-    if (scope.isGroup) {
-      return scope;
-    }
-
-    return const ItemScope.personal();
+    return GroupStore.instance.value.selectedGroupScope ??
+        const ItemScope.personal();
   }
 
   Widget _screenAt(int index) => switch (index) {
