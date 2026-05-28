@@ -509,6 +509,11 @@ class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
           user_id,
           group_id,
           registered_by,
+          registered_by_user:users!product_items_registered_by_fkey (
+            id,
+            display_name,
+            email
+          ),
           name,
           brand,
           image_url,

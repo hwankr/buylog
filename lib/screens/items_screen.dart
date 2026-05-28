@@ -216,6 +216,9 @@ class ItemRow extends StatelessWidget {
     final tile = dense ? 36.0 : 40.0;
     final iconSize = dense ? 18.0 : 20.0;
     final cyclePart = item.aiPredictedDays ?? item.cycleDays;
+    final registeredByLabel = item.groupId == null
+        ? null
+        : item.registeredByLabel;
 
     return Material(
       color: Colors.transparent,
@@ -275,6 +278,18 @@ class ItemRow extends StatelessWidget {
                         color: AppColors.textMuted,
                       ),
                     ),
+                    if (registeredByLabel != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '추가: $registeredByLabel',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

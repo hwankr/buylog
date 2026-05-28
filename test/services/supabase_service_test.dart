@@ -443,6 +443,50 @@ void main() {
       expect(gateway.lastUserId, isNull);
       expect(gateway.lastGroupId, 'group-1');
     });
+
+    test('maps registered user display data for group items', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'group-item-1', groupId: 'group-1')
+            ..['registered_by_user'] = <String, dynamic>{
+              'id': SupabaseService.currentUserId,
+              'display_name': 'Minseo',
+              'email': 'minseo@example.com',
+            },
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.group(id: 'group-1', label: 'Family'),
+      );
+
+      expect(items.single.registeredBy, SupabaseService.currentUserId);
+      expect(items.single.registeredByDisplayName, 'Minseo');
+      expect(items.single.registeredByEmail, 'minseo@example.com');
+      expect(items.single.registeredByLabel, 'Minseo');
+    });
+
+    test(
+      'uses registered user email as label when display name is blank',
+      () async {
+        final gateway = _RecordingItemDatabaseGateway()
+          ..loadItemsResult = <Map<String, dynamic>>[
+            _itemRow(id: 'group-item-1', groupId: 'group-1')
+              ..['registered_by_user'] = <String, dynamic>{
+                'id': SupabaseService.currentUserId,
+                'display_name': '   ',
+                'email': 'minseo@example.com',
+              },
+          ];
+        SupabaseService.debugItemDatabaseGateway = gateway;
+
+        final items = await SupabaseService.loadItemsForScope(
+          const ItemScope.group(id: 'group-1', label: 'Family'),
+        );
+
+        expect(items.single.registeredByLabel, 'minseo@example.com');
+      },
+    );
   });
 
   group('SupabaseService.saveItem scoped ownership', () {

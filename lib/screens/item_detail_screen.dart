@@ -396,6 +396,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                           color: AppColors.textMuted,
                         ),
                       ),
+                      _buildRegistrantMeta(),
                     ],
                   ),
                 ),
@@ -405,6 +406,46 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                   size: 100,
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRegistrantMeta() {
+    final registeredByLabel = _item.groupId == null
+        ? null
+        : _item.registeredByLabel;
+    if (registeredByLabel == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.person_add_alt_1_outlined,
+            size: 15,
+            color: AppColors.textMuted,
+          ),
+          const SizedBox(width: 6),
+          const Text(
+            '추가한 사람',
+            style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              registeredByLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

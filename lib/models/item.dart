@@ -15,6 +15,8 @@ class ConsumableItem {
   final String? imageUrl;
   final String? groupId;
   final String? registeredBy;
+  final String? registeredByDisplayName;
+  final String? registeredByEmail;
 
   const ConsumableItem({
     required this.id,
@@ -31,7 +33,24 @@ class ConsumableItem {
     this.imageUrl,
     this.groupId,
     this.registeredBy,
+    this.registeredByDisplayName,
+    this.registeredByEmail,
   });
+
+  String? get registeredByLabel {
+    final displayName = registeredByDisplayName?.trim();
+    if (displayName != null && displayName.isNotEmpty) {
+      return displayName;
+    }
+
+    final email = registeredByEmail?.trim();
+    if (email != null && email.isNotEmpty) {
+      return email;
+    }
+
+    final id = registeredBy?.trim();
+    return id == null || id.isEmpty ? null : id;
+  }
 
   /// Supabase product_items 행 + 관련 데이터로 ConsumableItem 생성
   ///
@@ -62,6 +81,10 @@ class ConsumableItem {
     final daysSince = lastDate != null
         ? DateTime.now().difference(lastDate).inDays
         : cycleDays;
+    final registeredUser = data['registered_by_user'] as Map<String, dynamic>?;
+    final registeredDisplayName = (registeredUser?['display_name'] as String?)
+        ?.trim();
+    final registeredEmail = (registeredUser?['email'] as String?)?.trim();
 
     return ConsumableItem(
       id: data['id'] as String,
@@ -75,6 +98,12 @@ class ConsumableItem {
       imageUrl: data['image_url'] as String?,
       groupId: data['group_id'] as String?,
       registeredBy: data['registered_by'] as String?,
+      registeredByDisplayName: registeredDisplayName?.isNotEmpty == true
+          ? registeredDisplayName
+          : null,
+      registeredByEmail: registeredEmail?.isNotEmpty == true
+          ? registeredEmail
+          : null,
       aiPredictedDays: aiPrediction?['predicted_cycle_days'] as int?,
       aiConfidence: (aiPrediction?['confidence'] as num?)?.toDouble(),
       purchaseHistory: sorted

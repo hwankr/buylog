@@ -35,28 +35,62 @@ void main() {
         MaterialApp(theme: AppTheme.lightTheme, home: const MainNavigation()),
       );
 
-      await tester.tap(find.text('그룹').last);
+      await tester.tap(find.byIcon(Icons.group_outlined));
       await tester.pump();
-      await tester.tap(find.byTooltip('제품 추가'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('직접 등록'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextFormField).first, '정수기 필터');
-      await tester.tap(find.text('등록 완료'));
-      await tester.pumpAndSettle();
+      await _addManualItem(tester);
 
       expect(gateway.ensureCategoryUserId, isNull);
       expect(gateway.ensureCategoryGroupId, 'group-1');
       expect(gateway.upsertPayload?['group_id'], 'group-1');
       expect(gateway.upsertPayload?['user_id'], isNull);
+      expect(
+        gateway.upsertPayload?['registered_by'],
+        SupabaseService.currentUserId,
+      );
     },
   );
+
+  testWidgets('home tab add action still targets personal items', (
+    tester,
+  ) async {
+    final gateway = _RecordingItemDatabaseGateway();
+    SupabaseService.debugItemDatabaseGateway = gateway;
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: 'Family'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.lightTheme, home: const MainNavigation()),
+    );
+
+    await _addManualItem(tester);
+
+    expect(gateway.ensureCategoryUserId, SupabaseService.currentUserId);
+    expect(gateway.ensureCategoryGroupId, isNull);
+    expect(gateway.upsertPayload?['user_id'], SupabaseService.currentUserId);
+    expect(gateway.upsertPayload?['group_id'], isNull);
+    expect(
+      gateway.upsertPayload?['registered_by'],
+      SupabaseService.currentUserId,
+    );
+  });
+}
+
+Future<void> _addManualItem(WidgetTester tester) async {
+  await tester.tap(find.byType(FloatingActionButton));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byIcon(Icons.edit_outlined));
+  await tester.pumpAndSettle();
+  await tester.enterText(find.byType(TextFormField).first, 'filter');
+  await tester.tap(find.byType(FilledButton).last);
+  await tester.pumpAndSettle();
 }
 
 BuylogGroup _group() {
   return BuylogGroup(
     id: 'group-1',
-    name: '우리 가족',
+    name: 'Family',
     inviteCode: 'BUY-ABC123',
     createdBy: SupabaseService.currentUserId,
     createdAt: DateTime.parse('2026-05-26T00:00:00.000Z'),
