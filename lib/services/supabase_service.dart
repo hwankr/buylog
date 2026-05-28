@@ -121,6 +121,27 @@ class SupabaseService {
     return BuylogGroup.fromSupabase(createdGroup);
   }
 
+  static Future<BuylogGroup> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    final trimmedGroupId = groupId.trim();
+    if (trimmedGroupId.isEmpty) {
+      throw ArgumentError.value(groupId, 'groupId', 'Group id is required.');
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Group name is required.');
+    }
+
+    final updatedGroup = await _groupDatabaseGateway.renameGroup(
+      groupId: trimmedGroupId,
+      name: trimmedName,
+    );
+    return BuylogGroup.fromSupabase(updatedGroup);
+  }
+
   static Future<List<BuylogGroupMember>> loadGroupMembers({
     required String groupId,
   }) async {
@@ -370,6 +391,11 @@ abstract class GroupDatabaseGateway {
     required String inviteCode,
   });
 
+  Future<Map<String, dynamic>> renameGroup({
+    required String groupId,
+    required String name,
+  });
+
   Future<List<Map<String, dynamic>>> loadGroupMembers({
     required String groupId,
   });
@@ -453,6 +479,20 @@ class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
           'create_group_with_owner',
           params: {'group_name': name, 'group_invite_code': inviteCode},
         )
+        .select(_groupProjection)
+        .single();
+    return Map<String, dynamic>.from(row);
+  }
+
+  @override
+  Future<Map<String, dynamic>> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    final row = await _client
+        .from('groups')
+        .update({'name': name})
+        .eq('id', groupId)
         .select(_groupProjection)
         .single();
     return Map<String, dynamic>.from(row);

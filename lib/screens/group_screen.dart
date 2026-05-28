@@ -11,6 +11,7 @@ import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/group/group_item_filter_chips.dart';
 import '../widgets/group/group_scoped_item_list.dart';
+import '../widgets/group/group_settings_dialog.dart';
 import '../widgets/group/group_status_summary.dart';
 import '../widgets/group/item_scope_tabs.dart';
 import 'add_item_screen.dart';
@@ -82,6 +83,52 @@ class _GroupScreenState extends State<GroupScreen> {
     );
   }
 
+  void _openGroupSettings(BuylogGroup group) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return ValueListenableBuilder<GroupState>(
+          valueListenable: GroupStore.instance,
+          builder: (context, state, _) {
+            var currentGroup = group;
+            for (final candidate in state.visibleGroups) {
+              if (candidate.id == group.id) {
+                currentGroup = candidate;
+                break;
+              }
+            }
+
+            return GroupSettingsDialog(
+              group: currentGroup,
+              canRenameGroup: currentGroup.isOwner(
+                SupabaseService.currentUserId,
+              ),
+              isUpdatingGroup: state.isUpdatingGroup,
+              isRefreshingMembers: state.isRefreshingMembers,
+              isLeavingGroup: state.isLeavingGroup,
+              errorMessage: state.errorMessage,
+              onRenameGroup: (name) => GroupStore.instance.renameGroup(
+                groupId: currentGroup.id,
+                name: name,
+              ),
+              onCopyInviteCode: () => _copyInviteCode(currentGroup.inviteCode),
+              onRefreshMembers: () =>
+                  GroupStore.instance.refreshMembers(groupId: currentGroup.id),
+              onLeaveGroup: () {
+                Navigator.of(dialogContext).pop();
+                if (!mounted) return;
+                showDialog<void>(
+                  context: this.context,
+                  builder: (_) => _LeaveGroupDialog(group: currentGroup),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -124,9 +171,11 @@ class _GroupScreenState extends State<GroupScreen> {
                       group: selectedGroup,
                       isRefreshingMembers: state.isRefreshingMembers,
                       isLeavingGroup: state.isLeavingGroup,
+                      isUpdatingGroup: state.isUpdatingGroup,
                       onRefreshMembers: () => GroupStore.instance
                           .refreshMembers(groupId: selectedGroup.id),
                       onCopyInviteCode: _copyInviteCode,
+                      onOpenSettings: () => _openGroupSettings(selectedGroup),
                     ),
                   )
                 else
@@ -273,15 +322,19 @@ class _GroupCard extends StatelessWidget {
     required this.group,
     required this.isRefreshingMembers,
     required this.isLeavingGroup,
+    required this.isUpdatingGroup,
     required this.onRefreshMembers,
     required this.onCopyInviteCode,
+    required this.onOpenSettings,
   });
 
   final BuylogGroup group;
   final bool isRefreshingMembers;
   final bool isLeavingGroup;
+  final bool isUpdatingGroup;
   final VoidCallback onRefreshMembers;
   final ValueChanged<String> onCopyInviteCode;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -319,6 +372,13 @@ class _GroupCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
+              IconButton(
+                tooltip: '그룹 설정',
+                onPressed: isLeavingGroup || isUpdatingGroup
+                    ? null
+                    : onOpenSettings,
+                icon: const Icon(Icons.settings_outlined),
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -345,26 +405,6 @@ class _GroupCard extends StatelessWidget {
                   icon: const Icon(Icons.copy, size: 18),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: OutlinedButton.icon(
-              onPressed: isLeavingGroup
-                  ? null
-                  : () => showDialog<void>(
-                      context: context,
-                      builder: (_) => _LeaveGroupDialog(group: group),
-                    ),
-              icon: isLeavingGroup
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.logout, size: 18),
-              label: const Text('그룹 탈퇴'),
             ),
           ),
           const SizedBox(height: 20),
