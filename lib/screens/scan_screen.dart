@@ -231,6 +231,7 @@ class _ScanScreenState extends State<ScanScreen>
           '영수증 사진을 찍거나 앨범에서 선택하세요',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
+        _buildScopeBanner(),
         const SizedBox(height: 32),
         Expanded(
           child: Padding(
@@ -285,6 +286,45 @@ class _ScanScreenState extends State<ScanScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildScopeBanner() {
+    if (!widget.targetScope.isGroup) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.primaryLight2,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.primaryLight, width: 0.5),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.group_outlined,
+              size: 18,
+              color: AppColors.primary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${widget.targetScope.label}에 스캔 추가',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.primaryDark,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

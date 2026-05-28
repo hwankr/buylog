@@ -10,10 +10,12 @@ import '../services/item_store.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/group/group_item_filter_chips.dart';
+import '../widgets/group/group_quick_actions.dart';
 import '../widgets/group/group_scoped_item_list.dart';
 import '../widgets/group/group_status_summary.dart';
 import '../widgets/group/item_scope_tabs.dart';
 import 'add_item_screen.dart';
+import 'scan_screen.dart';
 
 class GroupScreen extends StatefulWidget {
   const GroupScreen({super.key});
@@ -29,26 +31,61 @@ class _GroupScreenState extends State<GroupScreen> {
   void initState() {
     super.initState();
     _itemsStore = GroupItemsStore();
-    _itemsStore.load(GroupStore.instance.value.selectedScope);
+    GroupStore.instance.addListener(_syncSelectedGroupItems);
+    _syncSelectedGroupItems();
     ItemStore.instance.lastSaveEvent.addListener(_reloadAfterScopedSave);
   }
 
   @override
   void dispose() {
+    GroupStore.instance.removeListener(_syncSelectedGroupItems);
     ItemStore.instance.lastSaveEvent.removeListener(_reloadAfterScopedSave);
     _itemsStore.dispose();
     super.dispose();
   }
 
+  void _syncSelectedGroupItems() {
+    final selectedGroupScope = GroupStore.instance.value.selectedGroupScope;
+    if (selectedGroupScope == null) {
+      return;
+    }
+
+    final selectedScope = GroupStore.instance.value.selectedScope;
+    if (selectedScope.storageKey != selectedGroupScope.storageKey) {
+      if (_itemsStore.value.scope.storageKey != selectedGroupScope.storageKey) {
+        _itemsStore.load(selectedGroupScope);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final currentState = GroupStore.instance.value;
+        if (currentState.selectedScope.storageKey !=
+            selectedGroupScope.storageKey) {
+          GroupStore.instance.selectScope(selectedGroupScope);
+        }
+      });
+      return;
+    }
+
+    if (_itemsStore.value.scope.storageKey != selectedGroupScope.storageKey) {
+      _itemsStore.load(selectedGroupScope);
+    }
+  }
+
   void _selectScope(ItemScope scope) {
+    if (!scope.isGroup) {
+      return;
+    }
     GroupStore.instance.selectScope(scope);
     _itemsStore.load(scope);
   }
 
   void _reloadAfterScopedSave() {
     final event = ItemStore.instance.lastSaveEvent.value;
-    final selectedScope = GroupStore.instance.value.selectedScope;
-    if (event == null || event.scope.storageKey != selectedScope.storageKey) {
+    final selectedGroupScope = GroupStore.instance.value.selectedGroupScope;
+    if (event == null ||
+        selectedGroupScope == null ||
+        !event.scope.isGroup ||
+        event.scope.storageKey != selectedGroupScope.storageKey) {
       return;
     }
     _itemsStore.load(event.scope);
@@ -68,6 +105,42 @@ class _GroupScreenState extends State<GroupScreen> {
     );
   }
 
+  void _openScopedScan(ItemScope scope) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (scanContext) => Scaffold(
+          backgroundColor: AppColors.background,
+          body: Stack(
+            children: [
+              ScanScreen(targetScope: scope),
+              Positioned(
+                top: MediaQuery.of(scanContext).padding.top + 8,
+                right: 12,
+                child: Material(
+                  color: AppColors.surface,
+                  shape: const CircleBorder(),
+                  elevation: 1,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    color: AppColors.text,
+                    onPressed: () => Navigator.of(scanContext).pop(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openCreateGroupDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => const _CreateGroupDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -78,7 +151,10 @@ class _GroupScreenState extends State<GroupScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final selectedGroup = state.groupForScope(state.selectedScope);
+          final selectedGroupScope = state.selectedGroupScope;
+          final selectedGroup = selectedGroupScope == null
+              ? null
+              : state.groupForScope(selectedGroupScope);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(0, 20, 0, 24),
@@ -93,75 +169,90 @@ class _GroupScreenState extends State<GroupScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                ItemScopeTabs(
-                  scopes: state.availableScopes,
-                  selectedScope: state.selectedScope,
-                  onSelected: _selectScope,
-                ),
-                const SizedBox(height: 16),
-                if (selectedGroup != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _GroupCard(
-                      group: selectedGroup,
-                      isRefreshingMembers: state.isRefreshingMembers,
-                      isLeavingGroup: state.isLeavingGroup,
-                      onRefreshMembers: () => GroupStore.instance
-                          .refreshMembers(groupId: selectedGroup.id),
-                      onCopyInviteCode: _copyInviteCode,
-                    ),
-                  )
-                else if (state.visibleGroups.isEmpty)
+                if (state.visibleGroups.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: _EmptyGroupState(errorMessage: state.errorMessage),
+                  )
+                else ...[
+                  ItemScopeTabs(
+                    scopes: state.groupScopes,
+                    selectedScope: selectedGroupScope!,
+                    onSelected: _selectScope,
                   ),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    '${state.selectedScope.label} 목록',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: GroupQuickActions(
+                      onAddItem: () => _openScopedAdd(selectedGroupScope),
+                      onScanReceipt: () => _openScopedScan(selectedGroupScope),
+                      onCreateGroup: _openCreateGroupDialog,
+                      isCreateGroupDisabled: state.isSaving,
+                    ),
                   ),
-                ),
-                ValueListenableBuilder<GroupItemsState>(
-                  valueListenable: _itemsStore,
-                  builder: (context, itemState, _) {
-                    final summary = GroupDashboardSummaryBuilder.build(
-                      scope: itemState.scope,
-                      items: itemState.items,
-                      selectedFilter: itemState.selectedFilter,
-                    );
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                          child: GroupStatusSummary(summary: summary),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: GroupItemFilterChips(
-                            summary: summary,
-                            onSelected: _itemsStore.selectFilter,
+                  const SizedBox(height: 16),
+                  if (selectedGroup != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _GroupCard(
+                        group: selectedGroup,
+                        isRefreshingMembers: state.isRefreshingMembers,
+                        isLeavingGroup: state.isLeavingGroup,
+                        onRefreshMembers: () => GroupStore.instance
+                            .refreshMembers(groupId: selectedGroup.id),
+                        onCopyInviteCode: _copyInviteCode,
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      '${selectedGroupScope.label} 목록',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  ValueListenableBuilder<GroupItemsState>(
+                    valueListenable: _itemsStore,
+                    builder: (context, itemState, _) {
+                      final isSelectedItemScope =
+                          itemState.scope.storageKey ==
+                          selectedGroupScope.storageKey;
+                      final summary = GroupDashboardSummaryBuilder.build(
+                        scope: selectedGroupScope,
+                        items: isSelectedItemScope ? itemState.items : const [],
+                        selectedFilter: itemState.selectedFilter,
+                      );
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                            child: GroupStatusSummary(summary: summary),
                           ),
-                        ),
-                        GroupScopedItemList(
-                          items: summary.filteredItems,
-                          isLoading: itemState.isLoading,
-                          errorMessage: itemState.errorMessage,
-                          emptyMessage: summary.scope.isGroup
-                              ? '아직 이 그룹에 등록된 물품이 없습니다.'
-                              : '표시할 내 물품이 없습니다.',
-                          emptyActionLabel: summary.scope.isGroup
-                              ? '그룹에 제품 추가'
-                              : '내 물품 추가',
-                          onEmptyAction: () => _openScopedAdd(summary.scope),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: GroupItemFilterChips(
+                              summary: summary,
+                              onSelected: _itemsStore.selectFilter,
+                            ),
+                          ),
+                          GroupScopedItemList(
+                            items: summary.filteredItems,
+                            isLoading:
+                                itemState.isLoading && isSelectedItemScope,
+                            errorMessage: isSelectedItemScope
+                                ? itemState.errorMessage
+                                : null,
+                            emptyMessage: '아직 이 그룹에 등록된 물품이 없습니다.',
+                            emptyActionLabel: '그룹에 제품 추가',
+                            onEmptyAction: () =>
+                                _openScopedAdd(selectedGroupScope),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           );
