@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:buylog/data/sample_data.dart';
+import 'package:buylog/models/item.dart';
 import 'package:buylog/screens/reports_screen.dart';
 import 'package:buylog/widgets/reports/monthly_bar_chart.dart';
 
-Widget _wrap() {
-  return const MaterialApp(home: Scaffold(body: ReportsScreen()));
+Widget _wrap({List<ConsumableItem>? items}) {
+  return MaterialApp(
+    home: Scaffold(
+      body: ReportsScreen(
+        personalItemsListenable: ValueNotifier<List<ConsumableItem>>(
+          items ?? SampleData.items,
+        ),
+      ),
+    ),
+  );
 }
 
 Future<void> _pumpReportsScreen(WidgetTester tester) async {

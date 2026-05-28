@@ -1,6 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../data/sample_data.dart';
+import '../models/item.dart';
+import '../models/item_scope.dart';
+import '../services/group_store.dart';
+import '../services/item_store.dart';
+import '../services/report_items_store.dart';
 import '../services/report_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/reports/category_pie_chart.dart';
@@ -11,12 +16,24 @@ import '../widgets/reports/price_movement_list.dart';
 import '../widgets/reports/refill_forecast_card.dart';
 import '../widgets/reports/report_hero_card.dart';
 import '../widgets/reports/report_insight_strip.dart';
+import '../widgets/reports/report_scope_tabs.dart';
 import '../widgets/reports/share_action_button.dart';
 
 enum _ReportPeriod { monthly, yearly }
 
 class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({super.key});
+  const ReportsScreen({
+    super.key,
+    this.groupListenable,
+    this.personalItemsListenable,
+    this.saveEventListenable,
+    this.createReportItemsStore,
+  });
+
+  final ValueListenable<GroupState>? groupListenable;
+  final ValueListenable<List<ConsumableItem>>? personalItemsListenable;
+  final ValueListenable<ItemSaveEvent?>? saveEventListenable;
+  final ReportItemsStore Function()? createReportItemsStore;
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
@@ -33,6 +50,94 @@ class _ReportsScreenState extends State<ReportsScreen> {
   DateTime? _selectedMonth;
   _ReportPeriod _period = _ReportPeriod.monthly;
   int _selectedYear = DateTime.now().year;
+
+  late final ValueListenable<GroupState> _groupListenable;
+  late final ValueListenable<List<ConsumableItem>> _personalItemsListenable;
+  late final ValueListenable<ItemSaveEvent?> _saveEventListenable;
+  late final ReportItemsStore _reportItemsStore;
+  ItemScope _selectedScope = const ItemScope.personal();
+
+  @override
+  void initState() {
+    super.initState();
+    _groupListenable = widget.groupListenable ?? GroupStore.instance;
+    _personalItemsListenable =
+        widget.personalItemsListenable ?? ItemStore.instance;
+    _saveEventListenable =
+        widget.saveEventListenable ?? ItemStore.instance.lastSaveEvent;
+    _reportItemsStore =
+        widget.createReportItemsStore?.call() ?? ReportItemsStore();
+    _selectedScope = _normalizedScope(
+      _selectedScope,
+      _reportScopes(_groupListenable.value),
+    );
+    _groupListenable.addListener(_handleGroupsChanged);
+    _saveEventListenable.addListener(_reloadAfterScopedSave);
+    if (_selectedScope.isGroup) {
+      _reportItemsStore.load(_selectedScope);
+    }
+  }
+
+  @override
+  void dispose() {
+    _groupListenable.removeListener(_handleGroupsChanged);
+    _saveEventListenable.removeListener(_reloadAfterScopedSave);
+    _reportItemsStore.dispose();
+    super.dispose();
+  }
+
+  List<ItemScope> _reportScopes(GroupState state) {
+    return <ItemScope>[
+      const ItemScope.personal(),
+      for (final group in state.visibleGroups)
+        ItemScope.group(id: group.id, label: group.name),
+    ];
+  }
+
+  ItemScope _normalizedScope(ItemScope current, List<ItemScope> scopes) {
+    for (final scope in scopes) {
+      if (scope.storageKey == current.storageKey) return scope;
+    }
+    return const ItemScope.personal();
+  }
+
+  void _handleGroupsChanged() {
+    final normalized = _normalizedScope(
+      _selectedScope,
+      _reportScopes(_groupListenable.value),
+    );
+    final storageChanged = normalized.storageKey != _selectedScope.storageKey;
+    final labelChanged = normalized.label != _selectedScope.label;
+    if (!storageChanged && !labelChanged) return;
+
+    setState(() {
+      _selectedScope = normalized;
+      if (storageChanged) {
+        _selectedMonth = null;
+      }
+    });
+    if (normalized.isGroup) {
+      _reportItemsStore.load(normalized);
+    }
+  }
+
+  void _selectReportScope(ItemScope scope) {
+    if (scope.storageKey == _selectedScope.storageKey) return;
+    setState(() {
+      _selectedScope = scope;
+      _selectedMonth = null;
+    });
+    if (scope.isGroup) {
+      _reportItemsStore.load(scope);
+    }
+  }
+
+  void _reloadAfterScopedSave() {
+    final event = _saveEventListenable.value;
+    if (event == null || !_selectedScope.isGroup) return;
+    if (event.scope.storageKey != _selectedScope.storageKey) return;
+    _reportItemsStore.load(_selectedScope);
+  }
 
   void _onMonthTap(DateTime m) {
     setState(() {
@@ -57,7 +162,74 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final service = ReportService.fromItems(SampleData.items);
+    return ValueListenableBuilder<GroupState>(
+      valueListenable: _groupListenable,
+      builder: (context, groupState, _) {
+        final scopes = _reportScopes(groupState);
+        final selectedScope = _normalizedScope(_selectedScope, scopes);
+        if (selectedScope.storageKey != _selectedScope.storageKey ||
+            selectedScope.label != _selectedScope.label) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final storageChanged =
+                selectedScope.storageKey != _selectedScope.storageKey;
+            setState(() {
+              _selectedScope = selectedScope;
+              if (storageChanged) {
+                _selectedMonth = null;
+              }
+            });
+          });
+        }
+
+        return ValueListenableBuilder<List<ConsumableItem>>(
+          valueListenable: _personalItemsListenable,
+          builder: (context, personalItems, _) {
+            return ValueListenableBuilder<ReportItemsState>(
+              valueListenable: _reportItemsStore,
+              builder: (context, reportItemState, _) {
+                final groupStateMatches =
+                    reportItemState.scope.storageKey ==
+                    selectedScope.storageKey;
+                final reportItems = selectedScope.isPersonal
+                    ? personalItems
+                    : groupStateMatches
+                    ? reportItemState.items
+                    : const <ConsumableItem>[];
+                final isScopeLoading =
+                    selectedScope.isGroup &&
+                    groupStateMatches &&
+                    reportItemState.isLoading;
+                final scopeErrorMessage =
+                    selectedScope.isGroup && groupStateMatches
+                    ? reportItemState.errorMessage
+                    : null;
+
+                return _buildReportContent(
+                  context: context,
+                  scopes: scopes,
+                  selectedScope: selectedScope,
+                  items: reportItems,
+                  isScopeLoading: isScopeLoading,
+                  scopeErrorMessage: scopeErrorMessage,
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildReportContent({
+    required BuildContext context,
+    required List<ItemScope> scopes,
+    required ItemScope selectedScope,
+    required List<ConsumableItem> items,
+    required bool isScopeLoading,
+    required String? scopeErrorMessage,
+  }) {
+    final service = ReportService.fromItems(items);
     final now = DateTime.now();
     final months = service.aggregateRecentMonths();
     final yearly = service.aggregateYear(_selectedYear);
@@ -120,6 +292,30 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
             ),
           ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: ReportScopeTabs(
+                scopes: scopes,
+                selectedScope: selectedScope,
+                onSelected: _selectReportScope,
+              ),
+            ),
+          ),
+          if (isScopeLoading)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: _ReportStatusMessage.loading(),
+              ),
+            ),
+          if (scopeErrorMessage?.isNotEmpty == true)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: _ReportStatusMessage.error(scopeErrorMessage!),
+              ),
+            ),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -233,6 +429,50 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReportStatusMessage extends StatelessWidget {
+  const _ReportStatusMessage.loading()
+    : message = '리포트 데이터를 불러오는 중입니다.',
+      icon = Icons.sync,
+      color = AppColors.textSecondary;
+
+  const _ReportStatusMessage.error(this.message)
+    : icon = Icons.error_outline,
+      color = AppColors.danger;
+
+  final String message;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );
