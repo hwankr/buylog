@@ -1,15 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/item.dart';
+import '../models/price_cache_data.dart';
 import '../services/item_store.dart';
+import '../services/price_comparison_service.dart';
+import '../services/supabase_price_comparison_proxy.dart';
 import '../theme/app_theme.dart';
 import '../widgets/countdown_ring.dart';
 import 'add_item_screen.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../models/price_cache_data.dart';
 
 class ItemDetailScreen extends StatefulWidget {
   final ConsumableItem item;
@@ -28,7 +28,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   // 실시간 가격 데이터 변수
   bool _isLoadingPrice = true;
   List<PriceComparison> _realPriceData = [];
-  String? _buyLink; // 구매 링크 저장용
 
   @override
   void initState() {
@@ -46,138 +45,45 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       if (mounted) {
         setState(() {
           _realPriceData = cached.priceData;
-          _buyLink = cached.buyLink;
           _isLoadingPrice = false;
         });
       }
-      debugPrint('⚡ 최적화: 캐시된 가격 데이터 사용 (API 호출 생략)');
+      debugPrint('캐시된 가격 데이터 사용 (API 호출 생략)');
       return; // 캐시가 있으면 여기서 함수 끝내기
     }
 
-    final String naverId = dotenv.env['NAVER_CLIENT_ID'] ?? '';
-    final String naverSecret = dotenv.env['NAVER_CLIENT_SECRET'] ?? '';
-    final String openaiKey = dotenv.env['OPENAI_API_KEY'] ?? '';
-
-    if (naverId.isEmpty || naverSecret.isEmpty || openaiKey.isEmpty) {
-      debugPrint('API 키가 설정되지 않았습니다.');
-      if (mounted) setState(() => _isLoadingPrice = false);
-      return;
-    }
-
-    // 네이버 쇼핑 검색 API 호출
-    final String searchQuery = '${_item.brand} ${_item.name}'.trim();
-    final naverUrl =
-        'https://openapi.naver.com/v1/search/shop.json?query=${Uri.encodeComponent(searchQuery)}&display=1';
-
     try {
-      final naverResponse = await http.get(
-        Uri.parse(naverUrl),
-        headers: {
-          'X-Naver-Client-Id': naverId,
-          'X-Naver-Client-Secret': naverSecret,
-        },
-      );
+      final proxy = kIsWeb ? const SupabasePriceComparisonProxy() : null;
+      final priceData = await PriceComparisonService(
+        serverProxy: proxy?.fetchComparisons,
+      ).fetchComparisons(itemName: _item.name, brand: _item.brand);
 
-      if (naverResponse.statusCode == 200) {
-        final naverData = jsonDecode(utf8.decode(naverResponse.bodyBytes));
-        final items = naverData['items'] as List;
-
-        if (items.isNotEmpty) {
-          final firstItem = items[0];
-          final String rawTitle = firstItem['title'];
-          final int totalPrice = int.parse(firstItem['lprice']);
-          final String link = firstItem['link'];
-
-          // 쇼핑몰 이름
-          final String mallName = firstItem['mallName'];
-
-          // OpenAI Structured Outputs로 데이터 정제 요청
-          const openaiUrl = 'https://api.openai.com/v1/chat/completions';
-          final openaiResponse = await http.post(
-            Uri.parse(openaiUrl),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $openaiKey',
-            },
-            body: jsonEncode({
-              'model': 'gpt-4o-mini',
-              'messages': [
-                {
-                  'role': 'system',
-                  'content':
-                      '너는 쇼핑 데이터 분석가야. 상품명에서 총 수량(개수)을 파악하고 단가를 계산해 무조건 지정된 JSON 스키마로만 응답해.',
-                },
-                {
-                  'role': 'user',
-                  'content': '상품명: $rawTitle, 전체가격: $totalPrice원',
-                },
-              ],
-              'response_format': {
-                'type': 'json_schema',
-                'json_schema': {
-                  'name': 'product_analysis',
-                  'strict': true,
-                  'schema': {
-                    'type': 'object',
-                    'properties': {
-                      'total_count': {'type': 'integer'},
-                      'unit_price': {'type': 'integer'},
-                      'pure_name': {'type': 'string'},
-                    },
-                    'required': ['total_count', 'unit_price', 'pure_name'],
-                    'additionalProperties': false,
-                  },
-                },
-              },
-            }),
-          );
-
-          if (openaiResponse.statusCode == 200) {
-            final openaiData = jsonDecode(
-              utf8.decode(openaiResponse.bodyBytes),
-            );
-            final String aiJsonString =
-                openaiData['choices'][0]['message']['content'];
-            final Map<String, dynamic> aiResult = jsonDecode(aiJsonString);
-
-            // AI가 계산해 준 단가를 UI 모델에 매핑
-            final int unitPrice = aiResult['unit_price'];
-            final int totalCount = aiResult['total_count'];
-            final String pureName = aiResult['pure_name'];
-
-            final lowestPrice = PriceComparison(
-              store: '[$mallName] $pureName (총 $totalCount개 / 개당 $unitPrice원)',
-              price: totalPrice,
-              isLowest: true,
-            );
-
-            if (mounted) {
-              setState(() {
-                _realPriceData = [lowestPrice];
-                _buyLink = link; // 나중에 터치 시 이동할 링크 저장
-                _isLoadingPrice = false;
-              });
-            }
-            return;
-          }
-        }
+      if (priceData.isNotEmpty) {
+        _priceCache[_item.id] = PriceCacheData(
+          priceData: priceData,
+          fetchedAt: DateTime.now(),
+        );
       }
 
-      // 검색 결과가 없거나 통신 에러 시 예외 처리
-      if (mounted) setState(() => _isLoadingPrice = false);
+      if (mounted) {
+        setState(() {
+          _realPriceData = priceData;
+          _isLoadingPrice = false;
+        });
+      }
     } catch (e) {
       debugPrint('통신 및 파싱 에러: $e');
       if (mounted) setState(() => _isLoadingPrice = false);
     }
   }
 
-  Future<void> _launchBuyLink() async {
+  Future<void> _launchBuyLink(String? link) async {
     // null 방어
-    if (_buyLink == null || _buyLink!.isEmpty) return;
-    final Uri url = Uri.parse(_buyLink!);
+    if (link == null || link.isEmpty) return;
+    final Uri url = Uri.parse(link);
     try {
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-        debugPrint('링크 이동 실패: $_buyLink');
+        debugPrint('링크 이동 실패: $link');
       }
     } catch (e) {
       debugPrint('링크 실행 중 에러 발생: $e');
@@ -555,7 +461,9 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 padding: const EdgeInsets.only(bottom: 10),
                 // Row 전체를 InkWell로 감싸고 터치 이벤트(_launchBuyLink)를 연결
                 child: InkWell(
-                  onTap: _launchBuyLink,
+                  onTap: p.link == null || p.link!.isEmpty
+                      ? null
+                      : () => _launchBuyLink(p.link),
                   borderRadius: BorderRadius.circular(8), // 터치할 때 물결 효과를 부드럽게
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
