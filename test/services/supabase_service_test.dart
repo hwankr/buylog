@@ -14,11 +14,14 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int createGroupWithOwnerCalls = 0;
   int loadGroupMembersCalls = 0;
   int leaveGroupCalls = 0;
+  int renameGroupCalls = 0;
   String? createGroupWithOwnerName;
   String? createGroupWithOwnerInviteCode;
   String? loadGroupMembersGroupId;
   String? leaveGroupGroupId;
   String? leaveGroupNewOwnerUserId;
+  String? renameGroupGroupId;
+  String? renameGroupName;
   Map<String, dynamic>? loadDefaultGroupResult;
   List<Map<String, dynamic>> loadGroupsForUserResult = const [];
   Map<String, dynamic>? createGroupWithOwnerResult;
@@ -70,6 +73,24 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
             },
           ],
         };
+  }
+
+  @override
+  Future<Map<String, dynamic>> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    renameGroupCalls += 1;
+    renameGroupGroupId = groupId;
+    renameGroupName = name;
+    return <String, dynamic>{
+      'id': groupId,
+      'name': name,
+      'invite_code': 'BUY-ABC123',
+      'created_by': SupabaseService.currentUserId,
+      'created_at': '2026-05-26T00:00:00.000Z',
+      'group_members': <Map<String, dynamic>>[],
+    };
   }
 
   @override
@@ -294,6 +315,64 @@ void main() {
     });
   });
 
+  group('SupabaseService.renameGroup', () {
+    tearDown(() {
+      SupabaseService.debugGroupDatabaseGateway = null;
+    });
+
+    test('trims group id and name before gateway update', () async {
+      final gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      final group = await SupabaseService.renameGroup(
+        groupId: ' group-1 ',
+        name: '  새 가족  ',
+      );
+
+      expect(gateway.renameGroupCalls, 1);
+      expect(gateway.renameGroupGroupId, 'group-1');
+      expect(gateway.renameGroupName, '새 가족');
+      expect(group.id, 'group-1');
+      expect(group.name, '새 가족');
+    });
+
+    test('rejects blank group ids without calling gateway', () async {
+      final gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      await expectLater(
+        SupabaseService.renameGroup(groupId: '   ', name: '새 가족'),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.message,
+            'message',
+            'Group id is required.',
+          ),
+        ),
+      );
+
+      expect(gateway.renameGroupCalls, 0);
+    });
+
+    test('rejects blank names without calling gateway', () async {
+      final gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      await expectLater(
+        SupabaseService.renameGroup(groupId: 'group-1', name: '   '),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.message,
+            'message',
+            'Group name is required.',
+          ),
+        ),
+      );
+
+      expect(gateway.renameGroupCalls, 0);
+    });
+  });
+
   group('SupabaseService.loadGroupMembers', () {
     tearDown(() {
       SupabaseService.debugGroupDatabaseGateway = null;
@@ -443,6 +522,50 @@ void main() {
       expect(gateway.lastUserId, isNull);
       expect(gateway.lastGroupId, 'group-1');
     });
+
+    test('maps registered user display data for group items', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'group-item-1', groupId: 'group-1')
+            ..['registered_by_user'] = <String, dynamic>{
+              'id': SupabaseService.currentUserId,
+              'display_name': 'Minseo',
+              'email': 'minseo@example.com',
+            },
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.group(id: 'group-1', label: 'Family'),
+      );
+
+      expect(items.single.registeredBy, SupabaseService.currentUserId);
+      expect(items.single.registeredByDisplayName, 'Minseo');
+      expect(items.single.registeredByEmail, 'minseo@example.com');
+      expect(items.single.registeredByLabel, 'Minseo');
+    });
+
+    test(
+      'uses registered user email as label when display name is blank',
+      () async {
+        final gateway = _RecordingItemDatabaseGateway()
+          ..loadItemsResult = <Map<String, dynamic>>[
+            _itemRow(id: 'group-item-1', groupId: 'group-1')
+              ..['registered_by_user'] = <String, dynamic>{
+                'id': SupabaseService.currentUserId,
+                'display_name': '   ',
+                'email': 'minseo@example.com',
+              },
+          ];
+        SupabaseService.debugItemDatabaseGateway = gateway;
+
+        final items = await SupabaseService.loadItemsForScope(
+          const ItemScope.group(id: 'group-1', label: 'Family'),
+        );
+
+        expect(items.single.registeredByLabel, 'minseo@example.com');
+      },
+    );
   });
 
   group('SupabaseService.saveItem scoped ownership', () {

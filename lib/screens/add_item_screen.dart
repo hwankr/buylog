@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/item.dart';
 import '../models/item_scope.dart';
 import '../services/ai/category_defaults.dart';
+import '../services/group_store.dart';
 import '../services/supabase_service.dart';
 import '../services/item_store.dart';
 import '../theme/app_theme.dart';
@@ -56,6 +57,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   late final TextEditingController _brandCtrl;
   late final TextEditingController _cycleDaysCtrl;
   String _selectedCategory = categoryDefaultDays.keys.first;
+  late ItemScope _selectedScope;
 
   // 구매 이력 목록
   final List<_PurchaseEntry> _purchases = [];
@@ -69,7 +71,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   bool get _isEditing => widget.editItem != null;
 
-  ItemScope get _effectiveScope {
+  bool get _canChangeScope => !_isEditing;
+
+  ItemScope get _initialScope {
     final explicit = widget.targetScope;
     if (explicit != null) return explicit;
 
@@ -81,9 +85,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
     return const ItemScope.personal();
   }
 
+  ItemScope get _effectiveScope {
+    if (_isEditing) return _initialScope;
+    return _selectedScope;
+  }
+
   @override
   void initState() {
     super.initState();
+    _selectedScope = _initialScope;
     final edit = widget.editItem;
     final p = widget.prefillData;
 
@@ -212,6 +222,22 @@ class _AddItemScreenState extends State<AddItemScreen> {
     if (xFile == null) return;
     final bytes = await xFile.readAsBytes();
     setState(() => _imageBytes = bytes);
+  }
+
+  List<ItemScope> _scopeOptions(GroupState state) {
+    final options = <ItemScope>[
+      const ItemScope.personal(),
+      ...state.availableGroupScopes,
+    ];
+
+    final selectedAlreadyIncluded = options.any(
+      (scope) => scope.storageKey == _selectedScope.storageKey,
+    );
+    if (!selectedAlreadyIncluded && _selectedScope.isGroup) {
+      options.add(_selectedScope);
+    }
+
+    return options;
   }
 
   // ---------------------------------------------------------------------------
@@ -431,6 +457,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
               const SizedBox(height: 12),
               _buildImagePicker(),
               const SizedBox(height: 24),
+              _buildScopeToggle(),
               _sectionTitle('기본 정보'),
               const SizedBox(height: 12),
               _buildBasicInfoSection(),
@@ -627,6 +654,72 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 ],
               ),
       ),
+    );
+  }
+
+  Widget _buildScopeToggle() {
+    if (!_canChangeScope) return const SizedBox.shrink();
+
+    return ValueListenableBuilder<GroupState>(
+      valueListenable: GroupStore.instance,
+      builder: (context, state, _) {
+        final options = _scopeOptions(state);
+        if (options.length <= 1) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          key: const ValueKey('add_item_scope_toggle'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '등록 위치',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final scope in options)
+                  ChoiceChip(
+                    key: ValueKey('add_item_scope_${scope.storageKey}'),
+                    label: Text(scope.label),
+                    selected: scope.storageKey == _selectedScope.storageKey,
+                    onSelected: (_) {
+                      setState(() {
+                        _selectedScope = scope;
+                      });
+                    },
+                    selectedColor: AppColors.primary,
+                    backgroundColor: AppColors.surface,
+                    labelStyle: TextStyle(
+                      color: scope.storageKey == _selectedScope.storageKey
+                          ? Colors.white
+                          : AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      side: BorderSide(
+                        color: scope.storageKey == _selectedScope.storageKey
+                            ? AppColors.primary
+                            : AppColors.border,
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
     );
   }
 

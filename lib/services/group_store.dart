@@ -13,6 +13,7 @@ class GroupState {
     this.isSaving = false,
     this.isRefreshingMembers = false,
     this.isLeavingGroup = false,
+    this.isUpdatingGroup = false,
     this.errorMessage,
   });
 
@@ -25,6 +26,7 @@ class GroupState {
   final bool isSaving;
   final bool isRefreshingMembers;
   final bool isLeavingGroup;
+  final bool isUpdatingGroup;
   final String? errorMessage;
 
   List<BuylogGroup> get visibleGroups {
@@ -49,6 +51,8 @@ class GroupState {
     ];
   }
 
+  List<ItemScope> get availableGroupScopes => groupScopes;
+
   ItemScope? get selectedGroupScope {
     final scopes = groupScopes;
     if (selectedScope.isGroup) {
@@ -59,6 +63,11 @@ class GroupState {
       }
     }
     return scopes.isEmpty ? null : scopes.first;
+  }
+
+  BuylogGroup? get selectedGroup {
+    final scope = selectedGroupScope;
+    return scope == null ? null : groupForScope(scope);
   }
 
   BuylogGroup? groupForScope(ItemScope scope) {
@@ -77,6 +86,7 @@ class GroupState {
     bool? isSaving,
     bool? isRefreshingMembers,
     bool? isLeavingGroup,
+    bool? isUpdatingGroup,
     Object? errorMessage = _unset,
   }) {
     final nextGroups = groups ?? this.groups;
@@ -92,6 +102,7 @@ class GroupState {
       isSaving: isSaving ?? this.isSaving,
       isRefreshingMembers: isRefreshingMembers ?? this.isRefreshingMembers,
       isLeavingGroup: isLeavingGroup ?? this.isLeavingGroup,
+      isUpdatingGroup: isUpdatingGroup ?? this.isUpdatingGroup,
       errorMessage: identical(errorMessage, _unset)
           ? this.errorMessage
           : errorMessage as String?,
@@ -152,6 +163,58 @@ class GroupStore extends ValueNotifier<GroupState> {
         selectedScope: previousState.selectedScope,
         isLoading: previousState.isLoading,
         errorMessage: '그룹을 만들지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    final trimmedGroupId = groupId.trim();
+    if (trimmedGroupId.isEmpty) {
+      throw ArgumentError.value(groupId, 'groupId', 'Group id is required.');
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Group name is required.');
+    }
+
+    final previousState = value;
+    final currentGroup = previousState.groupForScope(
+      ItemScope.group(id: trimmedGroupId, label: ''),
+    );
+    if (currentGroup?.name == trimmedName || value.isUpdatingGroup) {
+      return;
+    }
+
+    value = previousState.copyWith(isUpdatingGroup: true, errorMessage: null);
+
+    try {
+      final updatedGroup = await SupabaseService.renameGroup(
+        groupId: trimmedGroupId,
+        name: trimmedName,
+      );
+      final updatedGroups = previousState.visibleGroups
+          .map((group) => group.id == updatedGroup.id ? updatedGroup : group)
+          .toList(growable: false);
+      final selectedScope =
+          previousState.selectedScope.isGroup &&
+              previousState.selectedScope.id == updatedGroup.id
+          ? ItemScope.group(id: updatedGroup.id, label: updatedGroup.name)
+          : previousState.selectedScope;
+
+      value = GroupState(
+        group: updatedGroups.isEmpty ? null : updatedGroups.first,
+        groups: updatedGroups,
+        selectedScope: selectedScope,
+      );
+    } catch (_) {
+      value = previousState.copyWith(
+        isUpdatingGroup: false,
+        errorMessage: '그룹 이름을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.',
       );
       rethrow;
     }

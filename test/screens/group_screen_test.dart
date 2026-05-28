@@ -125,7 +125,7 @@ void main() {
     expect(find.text('관리자'), findsOneWidget);
   });
 
-  testWidgets('renders scope tabs and switches selected group tab', (
+  testWidgets('renders group scope tabs and switches selected group tab', (
     WidgetTester tester,
   ) async {
     GroupStore.instance.value = GroupState(
@@ -227,6 +227,52 @@ void main() {
     expect(find.text('멤버 1명'), findsOneWidget);
   });
 
+  testWidgets('group leave action is only shown inside settings dialog', (
+    tester,
+  ) async {
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+
+    expect(find.text('그룹 탈퇴'), findsNothing);
+    expect(find.byTooltip('그룹 설정'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('그룹 설정'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('그룹 설정'), findsOneWidget);
+    expect(find.text('그룹 탈퇴'), findsOneWidget);
+  });
+
+  testWidgets('owner renames group from settings dialog', (tester) async {
+    final gateway = _FakeGroupDatabaseGateway();
+    SupabaseService.debugGroupDatabaseGateway = gateway;
+    GroupStore.instance.value = GroupState(
+      groups: <BuylogGroup>[_group()],
+      selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+    );
+
+    await tester.pumpWidget(_wrap());
+    await tester.tap(find.byTooltip('그룹 설정'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('group-settings-name-field')),
+      '새 가족',
+    );
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.renameGroupCalls, 1);
+    expect(gateway.renameGroupGroupId, 'group-1');
+    expect(gateway.renameGroupName, '새 가족');
+    expect(GroupStore.instance.value.selectedScope.label, '새 가족');
+    expect(find.text('새 가족'), findsAtLeastNWidgets(1));
+  });
+
   testWidgets('member can confirm leaving a group', (tester) async {
     final gateway = _FakeGroupDatabaseGateway();
     SupabaseService.debugGroupDatabaseGateway = gateway;
@@ -248,6 +294,8 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap());
+    await tester.tap(find.byTooltip('그룹 설정'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('그룹 탈퇴'));
     await tester.pumpAndSettle();
     await tester.tap(
@@ -269,6 +317,8 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap());
+    await tester.tap(find.byTooltip('그룹 설정'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('그룹 탈퇴'));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(DropdownButtonFormField<String>));
@@ -296,6 +346,8 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap());
+    await tester.tap(find.byTooltip('그룹 설정'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('그룹 탈퇴'));
     await tester.pumpAndSettle();
     await tester.tap(
@@ -572,11 +624,14 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
   int createGroupWithOwnerCalls = 0;
   int loadGroupMembersCalls = 0;
   int leaveGroupCalls = 0;
+  int renameGroupCalls = 0;
   Map<String, dynamic>? createdGroupValues;
   Object? createGroupWithOwnerError;
   List<Map<String, dynamic>> loadGroupMembersResult = const [];
   String? leaveGroupGroupId;
   String? leaveGroupNewOwnerUserId;
+  String? renameGroupGroupId;
+  String? renameGroupName;
   Map<String, dynamic>? _currentGroup;
   String nextCreatedGroupId = 'group-1';
 
@@ -614,6 +669,19 @@ class _FakeGroupDatabaseGateway implements GroupDatabaseGateway {
       name: name,
       inviteCode: inviteCode,
     );
+    _currentGroup = group;
+    return group;
+  }
+
+  @override
+  Future<Map<String, dynamic>> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    renameGroupCalls += 1;
+    renameGroupGroupId = groupId;
+    renameGroupName = name;
+    final group = _groupRow(id: groupId, name: name);
     _currentGroup = group;
     return group;
   }

@@ -127,6 +127,14 @@ class _ThrowingGroupDatabaseGateway implements GroupDatabaseGateway {
   }
 
   @override
+  Future<Map<String, dynamic>> renameGroup({
+    required String groupId,
+    required String name,
+  }) {
+    throw UnsupportedError('renameGroup is not used in this test');
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> loadGroupMembers({
     required String groupId,
   }) {

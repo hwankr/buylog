@@ -1,5 +1,8 @@
+import 'package:buylog/models/group.dart';
+import 'package:buylog/models/item.dart';
 import 'package:buylog/models/item_scope.dart';
 import 'package:buylog/screens/add_item_screen.dart';
+import 'package:buylog/services/group_store.dart';
 import 'package:buylog/services/item_store.dart';
 import 'package:buylog/services/supabase_service.dart';
 import 'package:buylog/theme/app_theme.dart';
@@ -12,36 +15,113 @@ void main() {
   setUp(() {
     gateway = _RecordingItemDatabaseGateway();
     SupabaseService.debugItemDatabaseGateway = gateway;
+    GroupStore.instance.resetForTesting();
     ItemStore.instance.value = [];
   });
 
   tearDown(() {
     SupabaseService.debugItemDatabaseGateway = null;
+    GroupStore.instance.resetForTesting();
+    ItemStore.instance.value = [];
   });
 
-  testWidgets('manual group registration saves with selected group id', (
-    tester,
-  ) async {
+  testWidgets('personal target scope is selected by default', (tester) async {
+    _seedGroups();
+
+    await tester.pumpWidget(_wrap(const AddItemScreen()));
+
+    expect(_scopeChip('personal'), findsOneWidget);
+    expect(tester.widget<ChoiceChip>(_scopeChip('personal')).selected, isTrue);
+    expect(
+      tester.widget<ChoiceChip>(_scopeChip('group:group-1')).selected,
+      isFalse,
+    );
+  });
+
+  testWidgets('group target scope is selected by default', (tester) async {
+    _seedGroups();
+
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.lightTheme,
-        home: const AddItemScreen(
-          targetScope: ItemScope.group(id: 'group-1', label: '우리 가족'),
+      _wrap(
+        const AddItemScreen(
+          targetScope: ItemScope.group(id: 'group-1', label: 'Family'),
         ),
       ),
     );
 
-    await tester.enterText(find.byType(TextFormField).at(0), '세제');
-    await tester.enterText(find.byType(TextFormField).at(1), '브랜드');
-    await tester.enterText(find.byType(TextFormField).at(2), '30');
-    await tester.enterText(find.byType(TextFormField).at(3), '8900');
-    await tester.enterText(find.byType(TextFormField).at(4), '마트');
+    expect(tester.widget<ChoiceChip>(_scopeChip('personal')).selected, isFalse);
+    expect(
+      tester.widget<ChoiceChip>(_scopeChip('group:group-1')).selected,
+      isTrue,
+    );
+  });
 
-    await tester.tap(find.text('등록 완료'));
+  testWidgets('switching from personal to group saves with group id', (
+    tester,
+  ) async {
+    _seedGroups();
+
+    await tester.pumpWidget(_wrap(const AddItemScreen()));
+    await tester.tap(_scopeChip('group:group-1'));
+    await tester.pump();
+    await _submitMinimalItem(tester);
+
+    expect(gateway.upsertedItemPayload?['user_id'], isNull);
+    expect(gateway.upsertedItemPayload?['group_id'], 'group-1');
+  });
+
+  testWidgets('switching from group to personal saves as personal item', (
+    tester,
+  ) async {
+    _seedGroups();
+
+    await tester.pumpWidget(
+      _wrap(
+        const AddItemScreen(
+          targetScope: ItemScope.group(id: 'group-1', label: 'Family'),
+        ),
+      ),
+    );
+    await tester.tap(_scopeChip('personal'));
+    await tester.pump();
+    await _submitMinimalItem(tester);
+
+    expect(
+      gateway.upsertedItemPayload?['user_id'],
+      SupabaseService.currentUserId,
+    );
+    expect(gateway.upsertedItemPayload?['group_id'], isNull);
+  });
+
+  testWidgets('edit mode hides scope toggle and preserves item group scope', (
+    tester,
+  ) async {
+    _seedGroups();
+
+    await tester.pumpWidget(
+      _wrap(
+        AddItemScreen(
+          editItem: ConsumableItem(
+            id: 'item-1',
+            name: 'filter',
+            brand: 'Coway',
+            category: 'Kitchen',
+            icon: Icons.kitchen_outlined,
+            daysRemaining: 10,
+            cycleDays: 30,
+            progress: 0.2,
+            groupId: 'group-1',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('add_item_scope_toggle')), findsNothing);
+    await tester.tap(find.byType(FilledButton).last);
     await tester.pumpAndSettle();
 
-    expect(gateway.upsertedItemPayload?['group_id'], 'group-1');
     expect(gateway.upsertedItemPayload?['user_id'], isNull);
+    expect(gateway.upsertedItemPayload?['group_id'], 'group-1');
   });
 
   testWidgets('shows the target group while adding a group item', (
@@ -60,6 +140,39 @@ void main() {
   });
 }
 
+Widget _wrap(Widget child) {
+  return MaterialApp(theme: AppTheme.lightTheme, home: child);
+}
+
+Finder _scopeChip(String storageKey) {
+  return find.byKey(ValueKey('add_item_scope_$storageKey'));
+}
+
+void _seedGroups() {
+  GroupStore.instance.value = GroupState(
+    groups: <BuylogGroup>[
+      BuylogGroup(
+        id: 'group-1',
+        name: 'Family',
+        inviteCode: 'BUY-ABC123',
+        createdBy: SupabaseService.currentUserId,
+        createdAt: DateTime.parse('2026-05-26T00:00:00.000Z'),
+      ),
+    ],
+    selectedScope: const ItemScope.group(id: 'group-1', label: 'Family'),
+  );
+}
+
+Future<void> _submitMinimalItem(WidgetTester tester) async {
+  await tester.enterText(find.byType(TextFormField).at(0), 'filter');
+  await tester.enterText(find.byType(TextFormField).at(1), 'Coway');
+  await tester.enterText(find.byType(TextFormField).at(2), '30');
+  await tester.enterText(find.byType(TextFormField).at(3), '8900');
+  await tester.enterText(find.byType(TextFormField).at(4), 'Market');
+  await tester.tap(find.byType(FilledButton).last);
+  await tester.pumpAndSettle();
+}
+
 class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   Map<String, dynamic>? upsertedItemPayload;
 
@@ -68,7 +181,7 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
     required String? userId,
     required String? groupId,
   }) async {
-    return const [];
+    return const <Map<String, dynamic>>[];
   }
 
   @override
