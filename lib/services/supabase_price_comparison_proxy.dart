@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/item.dart';
+import 'price_comparison_service.dart';
 
 class SupabasePriceComparisonProxy {
   const SupabasePriceComparisonProxy();
@@ -18,21 +19,33 @@ class SupabasePriceComparisonProxy {
     );
 
     final data = _decodeResponseData(response.data);
-    final rawComparisons = data['comparisons'] as List<dynamic>? ?? const [];
-
-    return rawComparisons
-        .whereType<Map<String, dynamic>>()
-        .map(
-          (row) => PriceComparison(
-            store: row['store'] as String? ?? '',
-            price: (row['price'] as num?)?.toInt() ?? 0,
-            isLowest: row['isLowest'] as bool? ?? false,
-            link: row['link'] as String?,
-          ),
-        )
-        .where((comparison) => comparison.store.isNotEmpty)
-        .toList(growable: false);
+    return parsePriceComparisonPayload(data);
   }
+}
+
+List<PriceComparison> parsePriceComparisonPayload(Map<String, dynamic> data) {
+  final error = (data['error'] as String?)?.trim();
+  if (error != null && error.isNotEmpty) {
+    final code = (data['code'] as String?)?.trim();
+    throw PriceComparisonProxyException(
+      code: code == null || code.isEmpty ? 'edge_function_error' : code,
+      message: error,
+    );
+  }
+
+  final rawComparisons = data['comparisons'] as List<dynamic>? ?? const [];
+  return rawComparisons
+      .whereType<Map<String, dynamic>>()
+      .map(
+        (row) => PriceComparison(
+          store: row['store'] as String? ?? '',
+          price: (row['price'] as num?)?.toInt() ?? 0,
+          isLowest: row['isLowest'] as bool? ?? false,
+          link: row['link'] as String?,
+        ),
+      )
+      .where((comparison) => comparison.store.isNotEmpty)
+      .toList(growable: false);
 }
 
 Map<String, dynamic> _decodeResponseData(dynamic data) {

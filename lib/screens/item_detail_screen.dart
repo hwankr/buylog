@@ -11,10 +11,22 @@ import '../theme/app_theme.dart';
 import '../widgets/countdown_ring.dart';
 import 'add_item_screen.dart';
 
+typedef PriceComparisonGateway =
+    Future<PriceComparisonFetchResult> Function({
+      required String itemName,
+      required String brand,
+      required int display,
+    });
+
 class ItemDetailScreen extends StatefulWidget {
   final ConsumableItem item;
+  final PriceComparisonGateway? priceComparisonGateway;
 
-  const ItemDetailScreen({super.key, required this.item});
+  const ItemDetailScreen({
+    super.key,
+    required this.item,
+    this.priceComparisonGateway,
+  });
 
   @override
   State<ItemDetailScreen> createState() => _ItemDetailScreenState();
@@ -28,6 +40,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   // 실시간 가격 데이터 변수
   bool _isLoadingPrice = true;
   List<PriceComparison> _realPriceData = [];
+  String? _priceErrorMessage;
 
   @override
   void initState() {
@@ -45,6 +58,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       if (mounted) {
         setState(() {
           _realPriceData = cached.priceData;
+          _priceErrorMessage = null;
           _isLoadingPrice = false;
         });
       }
@@ -53,27 +67,38 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     }
 
     try {
-      final proxy = kIsWeb ? const SupabasePriceComparisonProxy() : null;
-      final priceData = await PriceComparisonService(
-        serverProxy: proxy?.fetchComparisons,
-      ).fetchComparisons(itemName: _item.name, brand: _item.brand);
+      final gateway = widget.priceComparisonGateway;
+      final result = gateway != null
+          ? await gateway(itemName: _item.name, brand: _item.brand, display: 5)
+          : await PriceComparisonService(
+              serverProxy: kIsWeb
+                  ? const SupabasePriceComparisonProxy().fetchComparisons
+                  : null,
+              allowDirectFallback: !kIsWeb,
+            ).fetchComparisonResult(itemName: _item.name, brand: _item.brand);
 
-      if (priceData.isNotEmpty) {
+      if (result.comparisons.isNotEmpty) {
         _priceCache[_item.id] = PriceCacheData(
-          priceData: priceData,
+          priceData: result.comparisons,
           fetchedAt: DateTime.now(),
         );
       }
 
       if (mounted) {
         setState(() {
-          _realPriceData = priceData;
+          _realPriceData = result.comparisons;
+          _priceErrorMessage = result.failure == null ? null : result.message;
           _isLoadingPrice = false;
         });
       }
     } catch (e) {
       debugPrint('통신 및 파싱 에러: $e');
-      if (mounted) setState(() => _isLoadingPrice = false);
+      if (mounted) {
+        setState(() {
+          _priceErrorMessage = e.toString();
+          _isLoadingPrice = false;
+        });
+      }
     }
   }
 
@@ -491,9 +516,14 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 child: CircularProgressIndicator(),
               ),
             )
+          else if (_priceErrorMessage != null)
+            Text(
+              '가격 비교를 불러오지 못했습니다. $_priceErrorMessage',
+              style: const TextStyle(color: AppColors.textMuted),
+            )
           else if (_realPriceData.isEmpty)
             const Text(
-              '최저가 정보를 불러올 수 없습니다.',
+              '최저가 정보를 찾지 못했습니다.',
               style: TextStyle(color: AppColors.textMuted),
             )
           else

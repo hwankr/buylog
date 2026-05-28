@@ -12,6 +12,46 @@ typedef PriceComparisonServerProxy =
       required int display,
     });
 
+enum PriceComparisonSource { none, proxy, directNaver }
+
+enum PriceComparisonFailure {
+  missingNaverCredentials,
+  emptyQuery,
+  proxyFailed,
+  naverApiFailed,
+  invalidNaverResponse,
+  networkFailed,
+}
+
+class PriceComparisonFetchResult {
+  const PriceComparisonFetchResult({
+    required this.comparisons,
+    required this.source,
+    this.failure,
+    this.message,
+  });
+
+  final List<PriceComparison> comparisons;
+  final PriceComparisonSource source;
+  final PriceComparisonFailure? failure;
+  final String? message;
+
+  bool get isSuccess => failure == null;
+}
+
+class PriceComparisonProxyException implements Exception {
+  const PriceComparisonProxyException({
+    required this.code,
+    required this.message,
+  });
+
+  final String code;
+  final String message;
+
+  @override
+  String toString() => 'PriceComparisonProxyException($code): $message';
+}
+
 class PriceComparisonService {
   PriceComparisonService({
     http.Client? client,
@@ -19,19 +59,35 @@ class PriceComparisonService {
     String? naverClientSecret,
     String? openAiApiKey,
     PriceComparisonServerProxy? serverProxy,
+    bool allowDirectFallback = true,
   }) : _client = client ?? http.Client(),
        _naverClientId = naverClientId,
        _naverClientSecret = naverClientSecret,
        _openAiApiKey = openAiApiKey,
-       _serverProxy = serverProxy;
+       _serverProxy = serverProxy,
+       _allowDirectFallback = allowDirectFallback;
 
   final http.Client _client;
   final String? _naverClientId;
   final String? _naverClientSecret;
   final String? _openAiApiKey;
   final PriceComparisonServerProxy? _serverProxy;
+  final bool _allowDirectFallback;
 
   Future<List<PriceComparison>> fetchComparisons({
+    required String itemName,
+    required String brand,
+    int display = 5,
+  }) async {
+    final result = await fetchComparisonResult(
+      itemName: itemName,
+      brand: brand,
+      display: display,
+    );
+    return result.comparisons;
+  }
+
+  Future<PriceComparisonFetchResult> fetchComparisonResult({
     required String itemName,
     required String brand,
     int display = 5,
@@ -44,9 +100,27 @@ class PriceComparisonService {
           brand: brand,
           display: display,
         );
-        if (proxiedData.isNotEmpty) return proxiedData;
-      } catch (_) {
-        // Fall back to direct calls on native platforms.
+        if (proxiedData.isNotEmpty) {
+          return PriceComparisonFetchResult(
+            comparisons: proxiedData,
+            source: PriceComparisonSource.proxy,
+          );
+        }
+        if (!_allowDirectFallback) {
+          return const PriceComparisonFetchResult(
+            comparisons: [],
+            source: PriceComparisonSource.proxy,
+          );
+        }
+      } catch (error) {
+        if (!_allowDirectFallback) {
+          return PriceComparisonFetchResult(
+            comparisons: const [],
+            source: PriceComparisonSource.proxy,
+            failure: PriceComparisonFailure.proxyFailed,
+            message: error.toString(),
+          );
+        }
       }
     }
 
@@ -56,14 +130,26 @@ class PriceComparisonService {
         (_naverClientSecret ?? dotenv.env['NAVER_CLIENT_SECRET'] ?? '').trim();
 
     if (naverClientId.isEmpty || naverClientSecret.isEmpty) {
-      return const [];
+      return const PriceComparisonFetchResult(
+        comparisons: [],
+        source: PriceComparisonSource.none,
+        failure: PriceComparisonFailure.missingNaverCredentials,
+        message: 'Missing NAVER_CLIENT_ID or NAVER_CLIENT_SECRET.',
+      );
     }
 
     final query = [
       brand.trim(),
       itemName.trim(),
     ].where((part) => part.isNotEmpty).join(' ');
-    if (query.isEmpty) return const [];
+    if (query.isEmpty) {
+      return const PriceComparisonFetchResult(
+        comparisons: [],
+        source: PriceComparisonSource.none,
+        failure: PriceComparisonFailure.emptyQuery,
+        message: 'Item name or brand is required for price comparison.',
+      );
+    }
 
     final uri = Uri.https('openapi.naver.com', '/v1/search/shop.json', {
       'query': query,
@@ -71,59 +157,71 @@ class PriceComparisonService {
       'sort': 'sim',
     });
 
-    final response = await _client.get(
-      uri,
-      headers: {
-        'X-Naver-Client-Id': naverClientId,
-        'X-Naver-Client-Secret': naverClientSecret,
-      },
-    );
+    final http.Response response;
+    try {
+      response = await _client.get(
+        uri,
+        headers: {
+          'X-Naver-Client-Id': naverClientId,
+          'X-Naver-Client-Secret': naverClientSecret,
+        },
+      );
+    } catch (error) {
+      return PriceComparisonFetchResult(
+        comparisons: const [],
+        source: PriceComparisonSource.directNaver,
+        failure: PriceComparisonFailure.networkFailed,
+        message: error.toString(),
+      );
+    }
 
-    if (response.statusCode != 200) return const [];
+    if (response.statusCode != 200) {
+      return PriceComparisonFetchResult(
+        comparisons: const [],
+        source: PriceComparisonSource.directNaver,
+        failure: PriceComparisonFailure.naverApiFailed,
+        message: 'Naver API failed with status ${response.statusCode}.',
+      );
+    }
 
-    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    final rawItems = decoded is Map<String, dynamic>
-        ? decoded['items'] as List<dynamic>? ?? const []
-        : const [];
-    final shopItems = rawItems
-        .whereType<Map<String, dynamic>>()
-        .toList()
-        .asMap()
-        .entries
-        .map((entry) => _NaverShopItem.fromJson(entry.key, entry.value))
-        .where((item) => item != null)
-        .cast<_NaverShopItem>()
-        .toList();
+    final List<_NaverShopItem> shopItems;
+    try {
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final rawItems = decoded is Map<String, dynamic>
+          ? decoded['items'] as List<dynamic>? ?? const []
+          : const [];
+      shopItems = rawItems
+          .whereType<Map<String, dynamic>>()
+          .toList()
+          .asMap()
+          .entries
+          .map((entry) => _NaverShopItem.fromJson(entry.key, entry.value))
+          .where((item) => item != null)
+          .cast<_NaverShopItem>()
+          .toList();
+    } catch (error) {
+      return PriceComparisonFetchResult(
+        comparisons: const [],
+        source: PriceComparisonSource.directNaver,
+        failure: PriceComparisonFailure.invalidNaverResponse,
+        message: error.toString(),
+      );
+    }
 
-    if (shopItems.isEmpty) return const [];
+    if (shopItems.isEmpty) {
+      return const PriceComparisonFetchResult(
+        comparisons: [],
+        source: PriceComparisonSource.directNaver,
+      );
+    }
 
     final analyses = await _analyzeWithOpenAi(shopItems);
+    final comparisons = _buildComparisons(shopItems, analyses);
 
-    final comparisons = shopItems.map((item) {
-      final analysis = analyses[item.index];
-      final productName = analysis?.pureName ?? item.title;
-      final count = analysis?.totalCount;
-      final unitPrice = analysis?.unitPrice;
-      final suffix = count != null && unitPrice != null
-          ? ' (총 $count개 / 개당 ${_formatPrice(unitPrice)})'
-          : '';
-
-      return PriceComparison(
-        store: '[${item.mallName}] $productName$suffix',
-        price: item.price,
-        link: item.link,
-      );
-    }).toList()..sort((a, b) => a.price.compareTo(b.price));
-
-    return [
-      for (var i = 0; i < comparisons.length; i++)
-        PriceComparison(
-          store: comparisons[i].store,
-          price: comparisons[i].price,
-          link: comparisons[i].link,
-          isLowest: i == 0,
-        ),
-    ];
+    return PriceComparisonFetchResult(
+      comparisons: comparisons,
+      source: PriceComparisonSource.directNaver,
+    );
   }
 
   Future<Map<int, _OpenAiProductAnalysis>> _analyzeWithOpenAi(
@@ -145,7 +243,8 @@ class PriceComparisonService {
           'messages': [
             {
               'role': 'system',
-              'content': '너는 쇼핑 데이터 분석가야. 상품명에서 총 수량과 단가를 계산하고 JSON 스키마로만 응답해.',
+              'content':
+                  'You analyze shopping search results. Extract total item count, unit price, and a clean product name. Reply only with JSON that matches the schema.',
             },
             {
               'role': 'user',
@@ -226,6 +325,37 @@ class PriceComparisonService {
       return const {};
     }
   }
+}
+
+List<PriceComparison> _buildComparisons(
+  List<_NaverShopItem> shopItems,
+  Map<int, _OpenAiProductAnalysis> analyses,
+) {
+  final comparisons = shopItems.map((item) {
+    final analysis = analyses[item.index];
+    final productName = analysis?.pureName ?? item.title;
+    final count = analysis?.totalCount;
+    final unitPrice = analysis?.unitPrice;
+    final suffix = count != null && unitPrice != null
+        ? ' (총 $count개 / 개당 ${_formatPrice(unitPrice)})'
+        : '';
+
+    return PriceComparison(
+      store: '[${item.mallName}] $productName$suffix',
+      price: item.price,
+      link: item.link,
+    );
+  }).toList()..sort((a, b) => a.price.compareTo(b.price));
+
+  return [
+    for (var i = 0; i < comparisons.length; i++)
+      PriceComparison(
+        store: comparisons[i].store,
+        price: comparisons[i].price,
+        link: comparisons[i].link,
+        isLowest: i == 0,
+      ),
+  ];
 }
 
 class _NaverShopItem {

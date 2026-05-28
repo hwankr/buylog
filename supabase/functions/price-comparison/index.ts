@@ -15,6 +15,16 @@ type OpenAiProductAnalysis = {
   pure_name: string
 }
 
+class PriceComparisonError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -22,17 +32,31 @@ Deno.serve(async (req) => {
 
   try {
     const { itemName, brand, display = 5 } = await req.json()
-    const comparisons = await fetchComparisons({
+    const { comparisons, analysisApplied } = await fetchComparisons({
       itemName: String(itemName ?? ''),
       brand: String(brand ?? ''),
       display: Number(display),
     })
 
-    return jsonResponse({ comparisons })
+    return jsonResponse({
+      comparisons,
+      analysisEnabled: Boolean(Deno.env.get('OPENAI_API_KEY')?.trim()),
+      analysisApplied,
+    })
   } catch (error) {
+    if (error instanceof PriceComparisonError) {
+      return jsonResponse(
+        { code: error.code, error: error.message },
+        error.status,
+      )
+    }
+
     return jsonResponse(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      400,
+      {
+        code: 'unknown_error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      500,
     )
   }
 })
@@ -50,13 +74,17 @@ async function fetchComparisons({
   const naverClientSecret = Deno.env.get('NAVER_CLIENT_SECRET')?.trim()
 
   if (!naverClientId || !naverClientSecret) {
-    throw new Error('Missing Naver API credentials')
+    throw new PriceComparisonError(
+      'missing_naver_credentials',
+      'Missing Naver API credentials',
+      500,
+    )
   }
 
   const query = [brand.trim(), itemName.trim()]
     .filter((part) => part.length > 0)
     .join(' ')
-  if (!query) return []
+  if (!query) return { comparisons: [], analysisApplied: false }
 
   const url = new URL('https://openapi.naver.com/v1/search/shop.json')
   url.searchParams.set('query', query)
@@ -71,7 +99,11 @@ async function fetchComparisons({
   })
 
   if (!response.ok) {
-    throw new Error(`Naver API failed with status ${response.status}`)
+    throw new PriceComparisonError(
+      'naver_api_failed',
+      `Naver API failed with status ${response.status}`,
+      502,
+    )
   }
 
   const data = await response.json()
@@ -79,7 +111,9 @@ async function fetchComparisons({
     .map((item, index) => parseNaverShopItem(item, index))
     .filter((item): item is NaverShopItem => item !== null)
 
-  if (shopItems.length === 0) return []
+  if (shopItems.length === 0) {
+    return { comparisons: [], analysisApplied: false }
+  }
 
   const analyses = await analyzeWithOpenAi(shopItems)
   const comparisons = shopItems
@@ -101,10 +135,13 @@ async function fetchComparisons({
     })
     .sort((a, b) => a.price - b.price)
 
-  return comparisons.map((item, index) => ({
-    ...item,
-    isLowest: index === 0,
-  }))
+  return {
+    comparisons: comparisons.map((item, index) => ({
+      ...item,
+      isLowest: index === 0,
+    })),
+    analysisApplied: analyses.size > 0,
+  }
 }
 
 async function analyzeWithOpenAi(items: NaverShopItem[]) {
