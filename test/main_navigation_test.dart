@@ -37,7 +37,7 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.group_outlined));
       await tester.pump();
-      await _addManualItem(tester);
+      await _addManualItem(tester, expectedSelectedScopeKey: 'group:group-1');
 
       expect(gateway.ensureCategoryUserId, isNull);
       expect(gateway.ensureCategoryGroupId, 'group-1');
@@ -64,7 +64,7 @@ void main() {
       MaterialApp(theme: AppTheme.lightTheme, home: const MainNavigation()),
     );
 
-    await _addManualItem(tester);
+    await _addManualItem(tester, expectedSelectedScopeKey: 'personal');
 
     expect(gateway.ensureCategoryUserId, SupabaseService.currentUserId);
     expect(gateway.ensureCategoryGroupId, isNull);
@@ -77,11 +77,20 @@ void main() {
   });
 }
 
-Future<void> _addManualItem(WidgetTester tester) async {
+Future<void> _addManualItem(
+  WidgetTester tester, {
+  required String expectedSelectedScopeKey,
+}) async {
   await tester.tap(find.byType(FloatingActionButton));
   await tester.pumpAndSettle();
   await tester.tap(find.byIcon(Icons.edit_outlined));
   await tester.pumpAndSettle();
+
+  final chip = tester.widget<ChoiceChip>(
+    find.byKey(ValueKey('add_item_scope_$expectedSelectedScopeKey')),
+  );
+  expect(chip.selected, isTrue);
+
   await tester.enterText(find.byType(TextFormField).first, 'filter');
   await tester.tap(find.byType(FilledButton).last);
   await tester.pumpAndSettle();
