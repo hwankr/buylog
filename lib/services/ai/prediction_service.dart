@@ -1,6 +1,7 @@
+import 'personal_regression_service.dart';
 import 'regression_coefficients.dart';
 
-enum PredictionPhase { phase1, phase2, phase3 }
+enum PredictionPhase { phase1, phase2, phase3, phase4 }
 
 const double kPriorWeight = 3.0;
 const int kPhase3Threshold = 6; // 이 값 이상이면 Phase3
@@ -61,14 +62,16 @@ double calcWMA(List<int> intervals) {
 /// **Phase 3** (구매 이력 6회 이상)
 ///   Bayesian 혼합: prior=[categoryDefaultDays], likelihood=관측 평균.
 ///
-/// [categoryDefaultDays] : Phase 3 Bayesian prior + Phase 1 fallback (categoryName 없을 때)
-/// [categoryName]        : UI 카테고리명 → Phase 1 회귀 예측에 사용 (optional)
-/// [dailyUsage]          : 하루 사용량 → Phase 1 회귀 보정 (optional, null이면 기준값 사용)
+/// [categoryDefaultDays]  : Phase 3 Bayesian prior + Phase 1 fallback (categoryName 없을 때)
+/// [categoryName]         : UI 카테고리명 → Phase 1 회귀 예측에 사용 (optional)
+/// [dailyUsage]           : 하루 사용량 → Phase 1 회귀 보정 (optional, null이면 기준값 사용)
+/// [personalService]      : Phase 4 개인화 서비스 (optional). 구매 15회 이상 시 개인 β 사용.
 PredictionResult predictCycle({
   required List<DateTime> purchaseDates,
   required int categoryDefaultDays,
   String? categoryName,
   double? dailyUsage,
+  PersonalRegressionService? personalService,
 }) {
   final intervals = calcIntervals(purchaseDates);
   final count = intervals.length;
@@ -104,6 +107,39 @@ PredictionResult predictCycle({
       confidence: kConfidenceBase + count * kConfidenceStep,
       phase: PredictionPhase.phase2,
     );
+  }
+
+  // ── Phase 4: 구매 이력 15회 이상 → 개인화 다중회귀 ──────────────
+  if (purchaseDates.length >= kPhase4Threshold && personalService != null) {
+    final group =
+        ConsumableCycleCoefficients.categoryToGroup[categoryName] ?? 'average';
+    final baseCyc = ConsumableCycleCoefficients.baseCycleDays[group]!
+        .toDouble();
+    final du =
+        dailyUsage ?? (ConsumableCycleCoefficients.baseUsageRef[group] ?? 1.0);
+    final prevIntervalVal = intervals.isEmpty
+        ? baseCyc
+        : intervals.last.toDouble();
+    final isSummer = ConsumableCycleCoefficients.isCurrentSummer;
+
+    final personal = personalService.predict(
+      group: group,
+      dailyUsage: du,
+      baseCycle: baseCyc,
+      prevInterval: prevIntervalVal,
+      isSummer: isSummer,
+    );
+    if (personal != null) {
+      final confidence =
+          (kConfidencePhase3Base +
+                  (count - kConfidencePhase3Offset) * kConfidencePhase3Step)
+              .clamp(0.0, 1.0);
+      return PredictionResult(
+        predictedCycleDays: personal.round(),
+        confidence: confidence,
+        phase: PredictionPhase.phase4,
+      );
+    }
   }
 
   // ── Phase 3: 구매 이력 6회 이상 → Bayesian 혼합 ─────────────────
