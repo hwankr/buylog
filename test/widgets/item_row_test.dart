@@ -45,12 +45,28 @@ void main() {
 
     expect(find.textContaining('추가:'), findsNothing);
   });
+
+  testWidgets('item row shows current remaining quantity when available', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: Scaffold(
+          body: ItemRow(item: _item(remainingQuantity: 3), onTap: () {}),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('현재 3개'), findsOneWidget);
+  });
 }
 
 ConsumableItem _item({
   String? groupId,
   String? registeredByDisplayName,
   String? registeredByEmail,
+  int? remainingQuantity,
 }) {
   return ConsumableItem(
     id: 'item-1',
@@ -65,5 +81,6 @@ ConsumableItem _item({
     registeredBy: 'user-1',
     registeredByDisplayName: registeredByDisplayName,
     registeredByEmail: registeredByEmail,
+    remainingQuantity: remainingQuantity,
   );
 }

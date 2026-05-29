@@ -118,6 +118,37 @@ void main() {
 
     expect(find.text('최저가 정보를 찾지 못했습니다.'), findsOneWidget);
   });
+
+  testWidgets(
+    'item detail shows current inventory section when snapshot exists',
+    (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          item: _item(
+            id: 'item-inventory',
+            remainingQuantity: 2,
+            inventoryConfidence: 0.91,
+            inventorySourceName: 'Milk',
+            inventoryObservedAt: DateTime.parse('2026-05-29T06:12:00.000Z'),
+          ),
+          priceComparisonGateway:
+              ({required brand, required display, required itemName}) async {
+                return const PriceComparisonFetchResult(
+                  comparisons: [],
+                  source: PriceComparisonSource.proxy,
+                );
+              },
+        ),
+      );
+
+      await tester.pump();
+
+      expect(find.text('현재 남은 수량'), findsOneWidget);
+      expect(find.text('2개'), findsOneWidget);
+      expect(find.textContaining('신뢰도 91%'), findsOneWidget);
+      expect(find.textContaining('2026.05.29'), findsOneWidget);
+    },
+  );
 }
 
 Widget _wrap({
@@ -139,6 +170,10 @@ ConsumableItem _item({
   String? registeredBy,
   String? registeredByDisplayName,
   String? registeredByEmail,
+  int? remainingQuantity,
+  double? inventoryConfidence,
+  String? inventorySourceName,
+  DateTime? inventoryObservedAt,
 }) {
   return ConsumableItem(
     id: id,
@@ -153,5 +188,9 @@ ConsumableItem _item({
     registeredBy: registeredBy,
     registeredByDisplayName: registeredByDisplayName,
     registeredByEmail: registeredByEmail,
+    remainingQuantity: remainingQuantity,
+    inventoryConfidence: inventoryConfidence,
+    inventorySourceName: inventorySourceName,
+    inventoryObservedAt: inventoryObservedAt,
   );
 }

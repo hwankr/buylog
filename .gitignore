@@ -46,3 +46,7 @@ app.*.map.json
 
 # env
 .env
+
+# MIDAS runtime artifacts
+hardware/MIDAS/uploads/
+hardware/MIDAS/results/

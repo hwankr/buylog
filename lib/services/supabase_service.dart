@@ -245,13 +245,27 @@ class SupabaseService {
             ?.cast<Map<String, dynamic>>() ??
         <Map<String, dynamic>>[];
     final ai = aiList.isNotEmpty ? aiList.last : null;
+    final inventorySnapshot = _singleInventorySnapshot(
+      row['product_inventory_snapshots'],
+    );
 
     return ConsumableItem.fromSupabase(
       data: row,
       categoryName: categoryName,
       purchases: purchases,
       aiPrediction: ai,
+      inventorySnapshot: inventorySnapshot,
     );
+  }
+
+  static Map<String, dynamic>? _singleInventorySnapshot(Object? value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is List && value.isNotEmpty && value.first is Map) {
+      return Map<String, dynamic>.from(value.first as Map);
+    }
+    return null;
   }
 
   /// ConsumableItem을 Supabase에 upsert합니다.
@@ -561,7 +575,13 @@ class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
           created_at,
           categories ( id, name ),
           purchases ( id, purchase_date, price, store_name ),
-          ai_predictions ( predicted_cycle_days, confidence )
+          ai_predictions ( predicted_cycle_days, confidence ),
+          product_inventory_snapshots (
+            remaining_quantity,
+            confidence,
+            source_detected_name,
+            observed_at
+          )
         ''';
 
   @override

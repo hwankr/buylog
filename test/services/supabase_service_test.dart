@@ -182,6 +182,7 @@ Map<String, dynamic> _itemRow({
       },
     ],
     'ai_predictions': <Map<String, dynamic>>[],
+    'product_inventory_snapshots': <Map<String, dynamic>>[],
   };
 }
 
@@ -566,6 +567,53 @@ void main() {
         expect(items.single.registeredByLabel, 'minseo@example.com');
       },
     );
+
+    test('maps latest inventory snapshot for personal items', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'personal-1', userId: SupabaseService.currentUserId)
+            ..['product_inventory_snapshots'] = <Map<String, dynamic>>[
+              <String, dynamic>{
+                'remaining_quantity': 3,
+                'confidence': 0.91,
+                'source_detected_name': 'Milk',
+                'observed_at': '2026-05-29T06:12:00.000Z',
+              },
+            ],
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.personal(),
+      );
+
+      expect(items.single.remainingQuantity, 3);
+      expect(items.single.inventoryConfidence, 0.91);
+      expect(items.single.inventorySourceName, 'Milk');
+      expect(
+        items.single.inventoryObservedAt,
+        DateTime.parse('2026-05-29T06:12:00.000Z'),
+      );
+      expect(items.single.remainingQuantityLabel, '현재 3개');
+    });
+
+    test('leaves inventory fields null when no snapshot exists', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'personal-1', userId: SupabaseService.currentUserId),
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.personal(),
+      );
+
+      expect(items.single.remainingQuantity, isNull);
+      expect(items.single.inventoryObservedAt, isNull);
+      expect(items.single.inventoryConfidence, isNull);
+      expect(items.single.inventorySourceName, isNull);
+      expect(items.single.remainingQuantityLabel, isNull);
+    });
   });
 
   group('SupabaseService.saveItem scoped ownership', () {

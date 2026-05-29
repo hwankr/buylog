@@ -17,6 +17,10 @@ class ConsumableItem {
   final String? registeredBy;
   final String? registeredByDisplayName;
   final String? registeredByEmail;
+  final int? remainingQuantity;
+  final DateTime? inventoryObservedAt;
+  final double? inventoryConfidence;
+  final String? inventorySourceName;
 
   const ConsumableItem({
     required this.id,
@@ -35,6 +39,10 @@ class ConsumableItem {
     this.registeredBy,
     this.registeredByDisplayName,
     this.registeredByEmail,
+    this.remainingQuantity,
+    this.inventoryObservedAt,
+    this.inventoryConfidence,
+    this.inventorySourceName,
   });
 
   String? get registeredByLabel {
@@ -52,6 +60,12 @@ class ConsumableItem {
     return id == null || id.isEmpty ? null : id;
   }
 
+  String? get remainingQuantityLabel {
+    final quantity = remainingQuantity;
+    if (quantity == null) return null;
+    return '현재 $quantity개';
+  }
+
   /// Supabase product_items 행 + 관련 데이터로 ConsumableItem 생성
   ///
   /// [data]         product_items 행
@@ -63,6 +77,7 @@ class ConsumableItem {
     required String categoryName,
     required List<Map<String, dynamic>> purchases,
     Map<String, dynamic>? aiPrediction,
+    Map<String, dynamic>? inventorySnapshot,
   }) {
     final cycleDays = (data['replacement_cycle_days'] as int?) ?? 30;
 
@@ -85,6 +100,12 @@ class ConsumableItem {
     final registeredDisplayName = (registeredUser?['display_name'] as String?)
         ?.trim();
     final registeredEmail = (registeredUser?['email'] as String?)?.trim();
+    final inventoryObservedAtRaw = inventorySnapshot?['observed_at'];
+    final inventoryObservedAt = inventoryObservedAtRaw is DateTime
+        ? inventoryObservedAtRaw
+        : inventoryObservedAtRaw is String
+        ? DateTime.parse(inventoryObservedAtRaw)
+        : null;
 
     return ConsumableItem(
       id: data['id'] as String,
@@ -106,6 +127,13 @@ class ConsumableItem {
           : null,
       aiPredictedDays: aiPrediction?['predicted_cycle_days'] as int?,
       aiConfidence: (aiPrediction?['confidence'] as num?)?.toDouble(),
+      remainingQuantity: (inventorySnapshot?['remaining_quantity'] as num?)
+          ?.toInt(),
+      inventoryObservedAt: inventoryObservedAt,
+      inventoryConfidence: (inventorySnapshot?['confidence'] as num?)
+          ?.toDouble(),
+      inventorySourceName:
+          inventorySnapshot?['source_detected_name'] as String?,
       purchaseHistory: sorted
           .map(
             (p) => PurchaseRecord(
