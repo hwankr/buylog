@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'daily_usage_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  void _openDailyUsage(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const DailyUsageScreen()));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +123,12 @@ class SettingsScreen extends StatelessWidget {
                   activeThumbColor: AppColors.primary,
                 ),
               ),
+              _settingsTile(
+                Icons.tune_outlined,
+                '일일 사용량 설정',
+                subtitle: '카테고리별 사용량으로 예측 정확도 향상',
+                onTap: () => _openDailyUsage(context),
+              ),
             ]),
             const SizedBox(height: 20),
 
@@ -191,46 +204,51 @@ class SettingsScreen extends StatelessWidget {
     String title, {
     String? subtitle,
     Widget? trailing,
+    VoidCallback? onTap,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-      child: Row(
-        children: [
-          Icon(icon, size: 22, color: AppColors.textSecondary),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.text,
-                  ),
-                ),
-                if (subtitle != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textMuted,
-                      ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: AppColors.textSecondary),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.text,
                     ),
                   ),
-              ],
-            ),
-          ),
-          trailing ??
-              const Icon(
-                Icons.chevron_right,
-                size: 20,
-                color: AppColors.textMuted,
+                  if (subtitle != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        subtitle,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-        ],
+            ),
+            trailing ??
+                const Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: AppColors.textMuted,
+                ),
+          ],
+        ),
       ),
     );
   }

@@ -5,6 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/group.dart';
 import '../models/item.dart';
 import '../models/item_scope.dart';
+import '../services/ai/category_defaults.dart';
+import '../services/ai/prediction_service.dart';
+import '../services/daily_usage_service.dart';
 
 /// Supabase 연동 서비스
 ///
@@ -246,11 +249,37 @@ class SupabaseService {
         <Map<String, dynamic>>[];
     final ai = aiList.isNotEmpty ? aiList.last : null;
 
+    // Phase 1 회귀 예측: 구매 이력이 없을 때 daily_usage 반영
+    final purchaseDates = purchases
+        .map((p) => DateTime.tryParse(p['purchase_date'] as String? ?? ''))
+        .whereType<DateTime>()
+        .toList();
+
+    final dailyUsage = DailyUsageService.instance.getInternalValue(
+      categoryName,
+    );
+    final defaultDays = categoryDefaultDays[categoryName] ?? 30;
+
+    final localPrediction = predictCycle(
+      purchaseDates: purchaseDates,
+      categoryDefaultDays: defaultDays,
+      categoryName: categoryName,
+      dailyUsage: dailyUsage,
+    );
+
+    // Supabase AI 예측이 없거나 Phase 1인 경우 로컬 예측으로 대체
+    final Map<String, dynamic> effectiveAi =
+        ai ??
+        {
+          'predicted_cycle_days': localPrediction.predictedCycleDays,
+          'confidence': localPrediction.confidence,
+        };
+
     return ConsumableItem.fromSupabase(
       data: row,
       categoryName: categoryName,
       purchases: purchases,
-      aiPrediction: ai,
+      aiPrediction: effectiveAi,
     );
   }
 
