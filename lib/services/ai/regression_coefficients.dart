@@ -48,19 +48,19 @@ class ConsumableCycleCoefficients {
   /// consumable : 2.0  회/일
   /// average    : 1.0  (정규화 기준 — average 모델은 base_cycle 피처로 스케일 처리)
   static const Map<String, double> baseUsageRef = {
-    'filter':     3.0,
-    'liquid':     0.714286,
+    'filter': 3.0,
+    'liquid': 0.714286,
     'consumable': 2.0,
-    'average':    1.0,
+    'average': 1.0,
   };
 
   /// 대분류별 기준 교체 주기 (일)
   /// · daily_usage 미입력 시 prev_interval 기본값으로도 사용
   static const Map<String, int> baseCycleDays = {
-    'filter':     180,
-    'liquid':     30,
+    'filter': 180,
+    'liquid': 30,
     'consumable': 90,
-    'average':    60,
+    'average': 60,
   };
 
   // ─────────────────────────────────────────────────────────────────
@@ -70,39 +70,39 @@ class ConsumableCycleCoefficients {
   static const Map<String, Map<String, double>> data = {
     // ── 필터류 (R²=0.9636, MAE=9.57일) ──────────────────────────
     'filter': {
-      'intercept':         29.834096,
-      'daily_usage':       -5.192643,
-      'base_cycle':         0.0,
+      'intercept': 29.834096,
+      'daily_usage': -5.192643,
+      'base_cycle': 0.0,
       'correction_factor': 157.727935,
-      'prev_interval':      0.060512,
-      'season':            -20.761488,
+      'prev_interval': 0.060512,
+      'season': -20.761488,
     },
     // ── 액체류 (R²=0.9513, MAE=2.02일) ──────────────────────────
     'liquid': {
-      'intercept':         25.753586,
-      'daily_usage':       -18.359899,
-      'base_cycle':          0.0,
-      'correction_factor':  16.818363,
-      'prev_interval':       0.048988,
-      'season':             -1.550331,
+      'intercept': 25.753586,
+      'daily_usage': -18.359899,
+      'base_cycle': 0.0,
+      'correction_factor': 16.818363,
+      'prev_interval': 0.048988,
+      'season': -1.550331,
     },
     // ── 소모품류 (R²=0.9597, MAE=5.12일) ────────────────────────
     'consumable': {
-      'intercept':         48.193089,
-      'daily_usage':       -12.410406,
-      'base_cycle':          0.0,
-      'correction_factor':  64.806454,
-      'prev_interval':       0.046727,
-      'season':             -4.731752,
+      'intercept': 48.193089,
+      'daily_usage': -12.410406,
+      'base_cycle': 0.0,
+      'correction_factor': 64.806454,
+      'prev_interval': 0.046727,
+      'season': -4.731752,
     },
     // ── 전체 평균 fallback (R²=0.9364, MAE=13.29일) ──────────────
     'average': {
-      'intercept':         -7.845368,
-      'daily_usage':       -42.245094,
-      'base_cycle':          1.546601,
-      'correction_factor':  30.173558,
-      'prev_interval':       0.104154,
-      'season':            -10.388267,
+      'intercept': -7.845368,
+      'daily_usage': -42.245094,
+      'base_cycle': 1.546601,
+      'correction_factor': 30.173558,
+      'prev_interval': 0.104154,
+      'season': -10.388267,
     },
   };
 
@@ -134,19 +134,20 @@ class ConsumableCycleCoefficients {
     double? prevInterval,
     bool? isSummer,
   }) {
-    final coef  = data[group] ?? data['average']!;
-    final ref   = baseUsageRef[group] ?? 1.0;
-    final du    = dailyUsage  ?? ref;           // 미입력 → base_usage 사용
-    final pi    = prevInterval ?? baseCycle;    // 미입력 → base_cycle 사용
-    final cf    = ref / du;
+    final coef = data[group] ?? data['average']!;
+    final ref = baseUsageRef[group] ?? 1.0;
+    final du = dailyUsage ?? ref; // 미입력 → base_usage 사용
+    final pi = prevInterval ?? baseCycle; // 미입력 → base_cycle 사용
+    final cf = ref / du;
     final summer = isSummer ?? isCurrentSummer;
 
-    final raw = coef['intercept']!
-              + coef['daily_usage']!       * du
-              + coef['base_cycle']!        * baseCycle
-              + coef['correction_factor']! * cf
-              + coef['prev_interval']!     * pi
-              + coef['season']!            * (summer ? 1.0 : 0.0);
+    final raw =
+        coef['intercept']! +
+        coef['daily_usage']! * du +
+        coef['base_cycle']! * baseCycle +
+        coef['correction_factor']! * cf +
+        coef['prev_interval']! * pi +
+        coef['season']! * (summer ? 1.0 : 0.0);
 
     return raw.clamp(baseCycle * 0.25, baseCycle * 3.0);
   }
@@ -163,15 +164,15 @@ class ConsumableCycleCoefficients {
     double? prevInterval,
     bool? isSummer,
   }) {
-    final group   = categoryToGroup[categoryName] ?? 'average';
+    final group = categoryToGroup[categoryName] ?? 'average';
     final baseCyc = baseCycleDays[group]!.toDouble();
 
     return predict(
-      group:        group,
-      dailyUsage:   dailyUsage,
-      baseCycle:    baseCyc,
+      group: group,
+      dailyUsage: dailyUsage,
+      baseCycle: baseCyc,
       prevInterval: prevInterval,
-      isSummer:     isSummer,
+      isSummer: isSummer,
     ).round();
   }
 }

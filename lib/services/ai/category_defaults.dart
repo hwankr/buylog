@@ -18,6 +18,6 @@ const Map<String, int> categoryDefaultDays = {
 int getDefaultDays(String categoryName, {double? dailyUsage}) {
   return ConsumableCycleCoefficients.predictFromCategory(
     categoryName: categoryName,
-    dailyUsage:   dailyUsage,
+    dailyUsage: dailyUsage,
   );
 }

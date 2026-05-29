@@ -81,7 +81,7 @@ PredictionResult predictCycle({
       // 대분류 β 계수 또는 average fallback으로 회귀 예측
       predicted = ConsumableCycleCoefficients.predictFromCategory(
         categoryName: categoryName,
-        dailyUsage:   dailyUsage,
+        dailyUsage: dailyUsage,
         // prevInterval 미제공 → 대분류 기준 주기 사용 (내부 default)
       );
     } else {
