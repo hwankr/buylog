@@ -21,6 +21,9 @@ class ConsumableItem {
   final DateTime? inventoryObservedAt;
   final double? inventoryConfidence;
   final String? inventorySourceName;
+  final bool visionTrackingEnabled;
+  final int visionMeasureIntervalMinutes;
+  final DateTime? visionLastMeasuredAt;
 
   const ConsumableItem({
     required this.id,
@@ -43,6 +46,9 @@ class ConsumableItem {
     this.inventoryObservedAt,
     this.inventoryConfidence,
     this.inventorySourceName,
+    this.visionTrackingEnabled = false,
+    this.visionMeasureIntervalMinutes = 360,
+    this.visionLastMeasuredAt,
   });
 
   String? get registeredByLabel {
@@ -64,6 +70,14 @@ class ConsumableItem {
     final quantity = remainingQuantity;
     if (quantity == null) return null;
     return '현재 $quantity개';
+  }
+
+  String get visionMeasureIntervalLabel {
+    final minutes = visionMeasureIntervalMinutes;
+    if (minutes % 60 == 0) {
+      return '${minutes ~/ 60}시간마다';
+    }
+    return '$minutes분마다';
   }
 
   /// Supabase product_items 행 + 관련 데이터로 ConsumableItem 생성
@@ -106,6 +120,12 @@ class ConsumableItem {
         : inventoryObservedAtRaw is String
         ? DateTime.parse(inventoryObservedAtRaw)
         : null;
+    final visionLastMeasuredAtRaw = data['vision_last_measured_at'];
+    final visionLastMeasuredAt = visionLastMeasuredAtRaw is DateTime
+        ? visionLastMeasuredAtRaw
+        : visionLastMeasuredAtRaw is String
+        ? DateTime.parse(visionLastMeasuredAtRaw)
+        : null;
 
     return ConsumableItem(
       id: data['id'] as String,
@@ -134,6 +154,11 @@ class ConsumableItem {
           ?.toDouble(),
       inventorySourceName:
           inventorySnapshot?['source_detected_name'] as String?,
+      visionTrackingEnabled:
+          (data['vision_tracking_enabled'] as bool?) ?? false,
+      visionMeasureIntervalMinutes:
+          (data['vision_measure_interval_minutes'] as int?) ?? 360,
+      visionLastMeasuredAt: visionLastMeasuredAt,
       purchaseHistory: sorted
           .map(
             (p) => PurchaseRecord(

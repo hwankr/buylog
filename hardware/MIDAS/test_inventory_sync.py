@@ -44,6 +44,12 @@ class FakeTable:
         self.db.calls.append((self.name, "upsert", payload, on_conflict))
         return self
 
+    def update(self, payload):
+        self.operation = "update"
+        self.payload = payload
+        self.db.calls.append((self.name, "update", payload))
+        return self
+
     def execute(self):
         if self.name == "product_items" and self.operation is None:
             return FakeResponse(self.db.product_rows)
@@ -69,6 +75,9 @@ class FakeSupabase:
                 "brand": "Seoul",
                 "user_id": "user-1",
                 "group_id": None,
+                "vision_tracking_enabled": True,
+                "vision_measure_interval_minutes": 360,
+                "vision_last_measured_at": None,
             },
             {
                 "id": "item-2",
@@ -76,6 +85,9 @@ class FakeSupabase:
                 "brand": "Samdasoo",
                 "user_id": "user-1",
                 "group_id": None,
+                "vision_tracking_enabled": False,
+                "vision_measure_interval_minutes": 360,
+                "vision_last_measured_at": None,
             },
         ]
 
@@ -150,6 +162,59 @@ class InventorySyncTest(unittest.TestCase):
             InventoryOwner(user_id="user-1", group_id=None).to_observation_owner(),
             {"user_id": "user-1", "group_id": None},
         )
+
+    def test_load_catalog_only_returns_vision_enabled_items(self):
+        fake = FakeSupabase()
+        sync = InventorySync(
+            db=fake,
+            owner=InventoryOwner(user_id="user-1", group_id=None),
+        )
+
+        catalog = sync.load_catalog()
+
+        self.assertEqual([row["id"] for row in catalog], ["item-1"])
+
+    def test_persist_analysis_skips_snapshot_when_measurement_is_not_due(self):
+        fake = FakeSupabase()
+        fake.product_rows[0]["vision_last_measured_at"] = "2026-05-29T06:00:00Z"
+        fake.product_rows[0]["vision_measure_interval_minutes"] = 360
+        sync = InventorySync(
+            db=fake,
+            owner=InventoryOwner(user_id="user-1", group_id=None),
+            min_confidence=0.6,
+            min_match_score=0.82,
+        )
+
+        result = sync.persist_analysis(
+            device_id="kitchen-cam-01",
+            image_file="kitchen-cam-01_1.jpg",
+            txt_file="kitchen-cam-01_1.txt",
+            gpt_ok=True,
+            analysis_result={
+                "items": [
+                    {
+                        "item_name": "Milk",
+                        "quantity": 2,
+                        "confidence": 0.91,
+                        "note": "two bottles",
+                    }
+                ],
+                "summary": "Milk 2",
+            },
+            sensor_id="",
+            weight_g=None,
+            delta_g=None,
+        )
+
+        snapshot_calls = [
+            call
+            for call in fake.calls
+            if call[0] == "product_inventory_snapshots" and call[1] == "upsert"
+        ]
+        self.assertEqual(len(snapshot_calls), 0)
+        self.assertEqual(result["matched_count"], 1)
+        self.assertEqual(result["snapshot_updated_count"], 0)
+        self.assertEqual(result["measurement_skipped_count"], 1)
 
     def test_persist_analysis_inserts_observation_items_and_snapshot(self):
         fake = FakeSupabase()

@@ -171,6 +171,9 @@ Map<String, dynamic> _itemRow({
     'brand': '브랜드',
     'image_url': null,
     'replacement_cycle_days': 30,
+    'vision_tracking_enabled': false,
+    'vision_measure_interval_minutes': 360,
+    'vision_last_measured_at': null,
     'created_at': '2026-05-26T00:00:00.000Z',
     'categories': <String, dynamic>{'id': 'category-1', 'name': '주방/세제'},
     'purchases': <Map<String, dynamic>>[
@@ -614,6 +617,28 @@ void main() {
       expect(items.single.inventorySourceName, isNull);
       expect(items.single.remainingQuantityLabel, isNull);
     });
+
+    test('maps vision tracking settings from product rows', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'personal-1', userId: SupabaseService.currentUserId)
+            ..['vision_tracking_enabled'] = true
+            ..['vision_measure_interval_minutes'] = 720
+            ..['vision_last_measured_at'] = '2026-05-29T03:00:00.000Z',
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.personal(),
+      );
+
+      expect(items.single.visionTrackingEnabled, isTrue);
+      expect(items.single.visionMeasureIntervalMinutes, 720);
+      expect(
+        items.single.visionLastMeasuredAt,
+        DateTime.parse('2026-05-29T03:00:00.000Z'),
+      );
+    });
   });
 
   group('SupabaseService.saveItem scoped ownership', () {
@@ -686,6 +711,32 @@ void main() {
         SupabaseService.currentUserId,
       );
       expect(gateway.upsertedItemPayload?['group_id'], isNull);
+    });
+
+    test('saves vision tracking settings with product items', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      await SupabaseService.saveItem(
+        ConsumableItem(
+          id: 'item-1',
+          name: 'Milk',
+          brand: 'Seoul',
+          category: 'Kitchen',
+          icon: ConsumableItem.iconForCategory('Kitchen'),
+          daysRemaining: 30,
+          cycleDays: 30,
+          progress: 0,
+          visionTrackingEnabled: true,
+          visionMeasureIntervalMinutes: 720,
+        ),
+      );
+
+      expect(gateway.upsertedItemPayload?['vision_tracking_enabled'], isTrue);
+      expect(
+        gateway.upsertedItemPayload?['vision_measure_interval_minutes'],
+        720,
+      );
     });
   });
 

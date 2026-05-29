@@ -297,6 +297,8 @@ class SupabaseService {
         'brand': item.brand,
         'image_url': item.imageUrl,
         'replacement_cycle_days': item.cycleDays,
+        'vision_tracking_enabled': item.visionTrackingEnabled,
+        'vision_measure_interval_minutes': item.visionMeasureIntervalMinutes,
       });
 
       // id가 null인 신규 구매 이력만 삽입
@@ -572,6 +574,9 @@ class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
           brand,
           image_url,
           replacement_cycle_days,
+          vision_tracking_enabled,
+          vision_measure_interval_minutes,
+          vision_last_measured_at,
           created_at,
           categories ( id, name ),
           purchases ( id, purchase_date, price, store_name ),

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any
 import os
@@ -73,6 +74,30 @@ def _safe_confidence(value: Any) -> float:
     except (TypeError, ValueError):
         confidence = 0.0
     return max(0.0, min(confidence, 1.0))
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def is_product_due_for_vision(product: dict[str, Any], observed_at: Any) -> bool:
+    if not product.get("vision_tracking_enabled"):
+        return False
+
+    interval_minutes = _safe_int(product.get("vision_measure_interval_minutes")) or 360
+    last_measured_at = _parse_timestamp(product.get("vision_last_measured_at"))
+    if last_measured_at is None:
+        return True
+
+    observed = _parse_timestamp(observed_at) or datetime.now(timezone.utc)
+    return observed >= last_measured_at + timedelta(minutes=interval_minutes)
 
 
 def _match_score(detected: str, candidate: str) -> float:
@@ -183,13 +208,30 @@ class InventorySync:
         self.min_match_score = min_match_score
 
     def load_catalog(self) -> list[dict[str, Any]]:
-        query = self.db.table("product_items").select("id,name,brand,user_id,group_id")
+        query = self.db.table("product_items").select(
+            "id,name,brand,user_id,group_id,"
+            "vision_tracking_enabled,vision_measure_interval_minutes,"
+            "vision_last_measured_at"
+        )
         if self.owner.group_id:
             query = query.eq("group_id", self.owner.group_id)
         else:
             query = query.eq("user_id", self.owner.user_id)
+        query = query.eq("vision_tracking_enabled", True)
         response = query.execute()
-        return list(response.data or [])
+        return [
+            product
+            for product in list(response.data or [])
+            if product.get("vision_tracking_enabled") is True
+        ]
+
+    def load_due_catalog(self, observed_at: Any | None = None) -> list[dict[str, Any]]:
+        now = observed_at or datetime.now(timezone.utc)
+        return [
+            product
+            for product in self.load_catalog()
+            if is_product_due_for_vision(product, now)
+        ]
 
     def persist_analysis(
         self,
@@ -224,9 +266,11 @@ class InventorySync:
         ).data
         observation = observation_rows[0]
 
+        catalog = self.load_catalog()
+        product_by_id = {str(product["id"]): product for product in catalog}
         item_records = build_detected_item_records(
             items=list(analysis_result.get("items") or []),
-            catalog=self.load_catalog(),
+            catalog=catalog,
             min_confidence=self.min_confidence,
             min_match_score=self.min_match_score,
         )
@@ -247,11 +291,18 @@ class InventorySync:
             ).data or []
 
         matched_count = 0
+        snapshot_updated_count = 0
+        measurement_skipped_count = 0
         for row in inserted_items:
             if row.get("match_status") != "matched" or not row.get("product_item_id"):
                 continue
 
             matched_count += 1
+            product = product_by_id.get(str(row["product_item_id"]))
+            if not product or not is_product_due_for_vision(product, observation["observed_at"]):
+                measurement_skipped_count += 1
+                continue
+
             self.db.table("product_inventory_snapshots").upsert(
                 {
                     "product_item_id": row["product_item_id"],
@@ -263,10 +314,16 @@ class InventorySync:
                 },
                 on_conflict="product_item_id",
             ).execute()
+            self.db.table("product_items").update(
+                {"vision_last_measured_at": observation["observed_at"]}
+            ).eq("id", row["product_item_id"]).execute()
+            snapshot_updated_count += 1
 
         return {
             "ok": True,
             "observation_id": observation["id"],
             "detected_count": len(item_records),
             "matched_count": matched_count,
+            "snapshot_updated_count": snapshot_updated_count,
+            "measurement_skipped_count": measurement_skipped_count,
         }
