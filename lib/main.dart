@@ -16,6 +16,7 @@ import 'services/group_store.dart';
 import 'services/supabase_service.dart';
 import 'services/item_store.dart';
 import 'services/daily_usage_service.dart';
+import 'services/ai/personal_regression_service.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -36,6 +37,7 @@ Future<void> main() async {
 Future<void> bootstrapApp() async {
   await SupabaseService.initialize();
   await DailyUsageService.instance.initialize();
+  await PersonalRegressionService.instance.initialize();
   await ItemStore.instance.initialize();
   await preloadGroupForStartup();
   unawaited(loadEnvironmentForStartup());
