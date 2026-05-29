@@ -6,6 +6,7 @@ import '../models/group.dart';
 import '../models/item.dart';
 import '../models/item_scope.dart';
 import '../services/ai/category_defaults.dart';
+import '../services/ai/personal_regression_service.dart';
 import '../services/ai/prediction_service.dart';
 import '../services/daily_usage_service.dart';
 
@@ -265,6 +266,7 @@ class SupabaseService {
       categoryDefaultDays: defaultDays,
       categoryName: categoryName,
       dailyUsage: dailyUsage,
+      personalService: PersonalRegressionService.instance,
     );
 
     // Supabase AI 예측이 없거나 Phase 1인 경우 로컬 예측으로 대체
