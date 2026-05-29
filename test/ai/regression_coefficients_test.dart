@@ -246,13 +246,16 @@ void main() {
   // ─────────────────────────────────────────────────────────────────
   group('β 계수 부호  (도메인 직관 확인)', () {
     for (final group in ['filter', 'liquid', 'consumable']) {
-      test('$group: β_daily_usage < 0, β_correction_factor > 0, β_season < 0', () {
-        final c = ConsumableCycleCoefficients.data[group]!;
-        expect(c['daily_usage']!,       lessThan(0),    reason: '많이 쓸수록 단축');
-        expect(c['correction_factor']!, greaterThan(0), reason: '절약할수록 연장');
-        expect(c['prev_interval']!,     greaterThan(0), reason: '이전 주기 정비례');
-        expect(c['season']!,            lessThan(0),    reason: '여름 단축');
-      });
+      test(
+        '$group: β_daily_usage < 0, β_correction_factor > 0, β_season < 0',
+        () {
+          final c = ConsumableCycleCoefficients.data[group]!;
+          expect(c['daily_usage']!, lessThan(0), reason: '많이 쓸수록 단축');
+          expect(c['correction_factor']!, greaterThan(0), reason: '절약할수록 연장');
+          expect(c['prev_interval']!, greaterThan(0), reason: '이전 주기 정비례');
+          expect(c['season']!, lessThan(0), reason: '여름 단축');
+        },
+      );
     }
   });
 }
