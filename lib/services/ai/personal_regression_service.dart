@@ -135,6 +135,29 @@ class PersonalRegressionService {
       }
     }
 
+    // ── Ridge 정규화 (Tikhonov) ───────────────────────────────────────
+    // 단일 아이템 이력에서 dailyUsage·baseCycle·cf 는 모든 행에서 동일한
+    // 상수이므로 intercept 열과 선형 종속 → X'X 가 rank-deficient.
+    // (X'X + λI)β = X'y 로 항상 양정치(positive definite)를 보장한다.
+    //
+    // λ = max(1.0, trace(X'X) / p × α)  — 대각 평균의 α 배, 최소 1.0
+    //   α = 0.01 : 상수 피처 계수를 0 쪽으로 수축 (intercept 가 흡수)
+    //              prev_interval·season 은 분산이 있으므로 영향 작음
+    // intercept 항(인덱스 0)은 정규화 제외 — 절편 추정 편향 방지.
+    const double ridgeAlpha = 0.01;
+    double traceMean = 0.0;
+    for (int j = 0; j < p; j++) {
+      traceMean += xtx[j][j];
+    }
+    traceMean /= p;
+    final double lambda = traceMean * ridgeAlpha < 1.0
+        ? 1.0
+        : traceMean * ridgeAlpha;
+    for (int j = 1; j < p; j++) {
+      // j=0 은 intercept — 정규화 제외
+      xtx[j][j] += lambda;
+    }
+
     final beta = _gaussianElimination(xtx, xty);
     if (beta == null) return null;
 
