@@ -1,3 +1,5 @@
+import 'regression_coefficients.dart';
+
 enum PredictionPhase { phase1, phase2, phase3 }
 
 const double kPriorWeight = 3.0;
@@ -47,22 +49,54 @@ double calcWMA(List<int> intervals) {
   return valueSum / weightSum;
 }
 
+/// 소모품 교체 주기 예측
+///
+/// **Phase 1** (구매 이력 없음)
+///   회귀 모델 [ConsumableCycleCoefficients]로 예측.
+///   [categoryName]이 제공되면 대분류 β 계수 사용, 없으면 [categoryDefaultDays]로 fallback.
+///
+/// **Phase 2** (구매 이력 1~5회)
+///   가중이동평균(WMA) — 최근 구매일수록 높은 가중치.
+///
+/// **Phase 3** (구매 이력 6회 이상)
+///   Bayesian 혼합: prior=[categoryDefaultDays], likelihood=관측 평균.
+///
+/// [categoryDefaultDays] : Phase 3 Bayesian prior + Phase 1 fallback (categoryName 없을 때)
+/// [categoryName]        : UI 카테고리명 → Phase 1 회귀 예측에 사용 (optional)
+/// [dailyUsage]          : 하루 사용량 → Phase 1 회귀 보정 (optional, null이면 기준값 사용)
 PredictionResult predictCycle({
   required List<DateTime> purchaseDates,
   required int categoryDefaultDays,
+  String? categoryName,
+  double? dailyUsage,
 }) {
   final intervals = calcIntervals(purchaseDates);
   final count = intervals.length;
 
-  // Phase 1
+  // ── Phase 1: 구매 이력 없음 → 회귀 예측 ─────────────────────────
   if (count == 0) {
+    final int predicted;
+
+    if (categoryName != null) {
+      // 대분류 β 계수 또는 average fallback으로 회귀 예측
+      predicted = ConsumableCycleCoefficients.predictFromCategory(
+        categoryName: categoryName,
+        dailyUsage: dailyUsage,
+        // prevInterval 미제공 → 대분류 기준 주기 사용 (내부 default)
+      );
+    } else {
+      // categoryName 없음 → 기존 룰 기반값 유지 (하위 호환)
+      predicted = categoryDefaultDays;
+    }
+
     return PredictionResult(
-      predictedCycleDays: categoryDefaultDays,
+      predictedCycleDays: predicted,
       confidence: kConfidenceBase,
       phase: PredictionPhase.phase1,
     );
   }
-  // Phase 2
+
+  // ── Phase 2: 구매 이력 1~5회 → WMA ──────────────────────────────
   if (count < kPhase3Threshold) {
     final wma = calcWMA(intervals);
     return PredictionResult(
@@ -71,7 +105,8 @@ PredictionResult predictCycle({
       phase: PredictionPhase.phase2,
     );
   }
-  // Phase 3
+
+  // ── Phase 3: 구매 이력 6회 이상 → Bayesian 혼합 ─────────────────
   final observedAvg = intervals.reduce((a, b) => a + b) / intervals.length;
   final newEstimate =
       (kPriorWeight * categoryDefaultDays + count * observedAvg) /
