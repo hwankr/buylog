@@ -34,7 +34,9 @@ class _ManualQuantityDialogState extends State<_ManualQuantityDialog> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.initialQuantity.toString());
+    _controller = TextEditingController(
+      text: widget.initialQuantity.toString(),
+    );
   }
 
   @override
@@ -216,7 +218,8 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     final selected = await showDialog<int>(
       context: context,
       builder: (_) => _ManualQuantityDialog(
-        initialQuantity: _item.remainingQuantity ?? _item.totalPurchasedQuantity,
+        initialQuantity:
+            _item.remainingQuantity ?? _item.totalPurchasedQuantity,
       ),
     );
 

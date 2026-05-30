@@ -10,18 +10,17 @@ ConsumableItem _seed(
   String name = 'X',
   int days = 10,
   int? remainingQuantity,
-}) =>
-    ConsumableItem(
-      id: id,
-      name: name,
-      brand: 'B',
-      category: '기타',
-      icon: ConsumableItem.iconForCategory('기타'),
-      daysRemaining: days,
-      cycleDays: 30,
-      progress: 0.5,
-      remainingQuantity: remainingQuantity,
-    );
+}) => ConsumableItem(
+  id: id,
+  name: name,
+  brand: 'B',
+  category: '기타',
+  icon: ConsumableItem.iconForCategory('기타'),
+  daysRemaining: days,
+  cycleDays: 30,
+  progress: 0.5,
+  remainingQuantity: remainingQuantity,
+);
 
 void main() {
   group('ItemStore rollback', () {
@@ -154,23 +153,26 @@ void main() {
       expect(ItemStore.instance.value.single.remainingQuantity, 0);
     });
 
-    test('recordManualUsage rolls back local quantity on Supabase failure', () async {
-      final gateway = _RecordingItemDatabaseGateway()
-        ..manualUsageError = StateError('rpc failed');
-      SupabaseService.debugItemDatabaseGateway = gateway;
-      addTearDown(() => SupabaseService.debugItemDatabaseGateway = null);
-      ItemStore.instance.value = [_seed('a', remainingQuantity: 3)];
+    test(
+      'recordManualUsage rolls back local quantity on Supabase failure',
+      () async {
+        final gateway = _RecordingItemDatabaseGateway()
+          ..manualUsageError = StateError('rpc failed');
+        SupabaseService.debugItemDatabaseGateway = gateway;
+        addTearDown(() => SupabaseService.debugItemDatabaseGateway = null);
+        ItemStore.instance.value = [_seed('a', remainingQuantity: 3)];
 
-      await expectLater(
-        ItemStore.instance.recordManualUsage(
-          ItemStore.instance.value.single,
-          usedQuantity: 1,
-        ),
-        throwsA(isA<StateError>()),
-      );
+        await expectLater(
+          ItemStore.instance.recordManualUsage(
+            ItemStore.instance.value.single,
+            usedQuantity: 1,
+          ),
+          throwsA(isA<StateError>()),
+        );
 
-      expect(ItemStore.instance.value.single.remainingQuantity, 3);
-    });
+        expect(ItemStore.instance.value.single.remainingQuantity, 3);
+      },
+    );
   });
 }
 

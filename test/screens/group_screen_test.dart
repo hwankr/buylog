@@ -498,7 +498,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(1), '브랜드');
     await tester.enterText(find.byType(TextFormField).at(2), '30');
     await tester.enterText(find.byType(TextFormField).at(3), '8900');
-    await tester.enterText(find.byType(TextFormField).at(4), '마트');
+    await tester.enterText(find.byType(TextFormField).at(5), '마트');
     await tester.tap(find.text('등록 완료'));
     await tester.pumpAndSettle();
 

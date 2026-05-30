@@ -822,36 +822,39 @@ void main() {
       expect(gateway.manualQuantityRemainingQuantity, 10);
     });
 
-    test('updates existing purchase quantity when purchase id is present', () async {
-      final gateway = _RecordingItemDatabaseGateway();
-      SupabaseService.debugItemDatabaseGateway = gateway;
+    test(
+      'updates existing purchase quantity when purchase id is present',
+      () async {
+        final gateway = _RecordingItemDatabaseGateway();
+        SupabaseService.debugItemDatabaseGateway = gateway;
 
-      await SupabaseService.saveItem(
-        ConsumableItem(
-          id: 'item-existing',
-          name: '필터',
-          brand: 'Brand',
-          category: '가전/필터',
-          icon: ConsumableItem.iconForCategory('가전/필터'),
-          daysRemaining: 30,
-          cycleDays: 30,
-          progress: 0,
-          purchaseHistory: <PurchaseRecord>[
-            PurchaseRecord(
-              id: 'purchase-existing',
-              date: DateTime(2026, 5, 30),
-              price: 45000,
-              store: 'Market',
-              quantity: 3,
-            ),
-          ],
-        ),
-      );
+        await SupabaseService.saveItem(
+          ConsumableItem(
+            id: 'item-existing',
+            name: '필터',
+            brand: 'Brand',
+            category: '가전/필터',
+            icon: ConsumableItem.iconForCategory('가전/필터'),
+            daysRemaining: 30,
+            cycleDays: 30,
+            progress: 0,
+            purchaseHistory: <PurchaseRecord>[
+              PurchaseRecord(
+                id: 'purchase-existing',
+                date: DateTime(2026, 5, 30),
+                price: 45000,
+                store: 'Market',
+                quantity: 3,
+              ),
+            ],
+          ),
+        );
 
-      expect(gateway.insertedPurchasePayloads, isEmpty);
-      expect(gateway.updatedPurchaseIds, <String>['purchase-existing']);
-      expect(gateway.updatedPurchasePayloads.single['quantity'], 3);
-    });
+        expect(gateway.insertedPurchasePayloads, isEmpty);
+        expect(gateway.updatedPurchaseIds, <String>['purchase-existing']);
+        expect(gateway.updatedPurchasePayloads.single['quantity'], 3);
+      },
+    );
   });
 
   group('SupabaseService manual quantity sync', () {

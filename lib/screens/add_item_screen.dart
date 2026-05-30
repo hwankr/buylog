@@ -362,9 +362,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
             final mergedRemainingQuantity = existingRemaining == null
                 ? duplicate.totalPurchasedQuantity + newPurchaseQuantity
                 : existingRemaining + newPurchaseQuantity;
-            final mergedPurchaseHistory =
-                List<PurchaseRecord>.of(duplicate.purchaseHistory)
-                  ..addAll(newPurchases);
+            final mergedPurchaseHistory = List<PurchaseRecord>.of(
+              duplicate.purchaseHistory,
+            )..addAll(newPurchases);
             final merged = duplicate.copyWith(
               imageUrl: imageUrl ?? duplicate.imageUrl,
               remainingQuantity: mergedRemainingQuantity,

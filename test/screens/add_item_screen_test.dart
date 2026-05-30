@@ -214,8 +214,13 @@ void main() {
   ) async {
     await tester.pumpWidget(_wrap(const AddItemScreen()));
 
-    await tester.ensureVisible(find.byKey(const ValueKey('purchase_quantity_0')));
-    await tester.enterText(find.byKey(const ValueKey('purchase_quantity_0')), '10');
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('purchase_quantity_0')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('purchase_quantity_0')),
+      '10',
+    );
     await _submitMinimalItem(tester);
 
     expect(gateway.insertedPurchasePayloads.single['quantity'], 10);

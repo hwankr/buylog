@@ -64,14 +64,12 @@ void main() {
 
   group('ManualQuantitySnapshot', () {
     test('maps RPC response fields', () {
-      final snapshot = ManualQuantitySnapshot.fromSupabase(
-        <String, dynamic>{
-          'remaining_quantity': 7,
-          'confidence': 1.0,
-          'source_detected_name': 'manual',
-          'observed_at': '2026-05-30T12:00:00.000Z',
-        },
-      );
+      final snapshot = ManualQuantitySnapshot.fromSupabase(<String, dynamic>{
+        'remaining_quantity': 7,
+        'confidence': 1.0,
+        'source_detected_name': 'manual',
+        'observed_at': '2026-05-30T12:00:00.000Z',
+      });
 
       expect(snapshot.remainingQuantity, 7);
       expect(snapshot.confidence, 1.0);
