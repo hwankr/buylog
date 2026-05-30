@@ -249,6 +249,9 @@ class SupabaseService {
             ?.cast<Map<String, dynamic>>() ??
         <Map<String, dynamic>>[];
     final ai = aiList.isNotEmpty ? aiList.last : null;
+    final inventorySnapshot = _singleInventorySnapshot(
+      row['product_inventory_snapshots'],
+    );
 
     // Phase 1 회귀 예측: 구매 이력이 없을 때 daily_usage 반영
     final purchaseDates = purchases
@@ -282,7 +285,18 @@ class SupabaseService {
       categoryName: categoryName,
       purchases: purchases,
       aiPrediction: effectiveAi,
+      inventorySnapshot: inventorySnapshot,
     );
+  }
+
+  static Map<String, dynamic>? _singleInventorySnapshot(Object? value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is List && value.isNotEmpty && value.first is Map) {
+      return Map<String, dynamic>.from(value.first as Map);
+    }
+    return null;
   }
 
   /// ConsumableItem을 Supabase에 upsert합니다.
@@ -314,6 +328,8 @@ class SupabaseService {
         'brand': item.brand,
         'image_url': item.imageUrl,
         'replacement_cycle_days': item.cycleDays,
+        'vision_tracking_enabled': item.visionTrackingEnabled,
+        'vision_measure_interval_minutes': item.visionMeasureIntervalMinutes,
       });
 
       // id가 null인 신규 구매 이력만 삽입
@@ -589,10 +605,19 @@ class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
           brand,
           image_url,
           replacement_cycle_days,
+          vision_tracking_enabled,
+          vision_measure_interval_minutes,
+          vision_last_measured_at,
           created_at,
           categories ( id, name ),
           purchases ( id, purchase_date, price, store_name ),
-          ai_predictions ( predicted_cycle_days, confidence )
+          ai_predictions ( predicted_cycle_days, confidence ),
+          product_inventory_snapshots (
+            remaining_quantity,
+            confidence,
+            source_detected_name,
+            observed_at
+          )
         ''';
 
   @override

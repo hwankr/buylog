@@ -219,6 +219,12 @@ class ItemRow extends StatelessWidget {
     final registeredByLabel = item.groupId == null
         ? null
         : item.registeredByLabel;
+    final quantityLabel = item.remainingQuantityLabel;
+    final detailParts = <String>[
+      if (item.brand.trim().isNotEmpty) item.brand,
+      ?quantityLabel,
+      '주기 $cyclePart일',
+    ];
 
     return Material(
       color: Colors.transparent,
@@ -270,7 +276,7 @@ class ItemRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${item.brand} · 주기 $cyclePart일',
+                      detailParts.join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(

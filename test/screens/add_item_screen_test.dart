@@ -138,6 +138,53 @@ void main() {
 
     expect(find.text('우리 가족에 추가 중'), findsOneWidget);
   });
+
+  testWidgets('vision tracking is off by default when adding an item', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(const AddItemScreen()));
+
+    expect(
+      tester
+          .widget<Switch>(find.byKey(const ValueKey('vision_tracking_switch')))
+          .value,
+      isFalse,
+    );
+
+    await _submitMinimalItem(tester);
+
+    expect(gateway.upsertedItemPayload?['vision_tracking_enabled'], isFalse);
+    expect(
+      gateway.upsertedItemPayload?['vision_measure_interval_minutes'],
+      360,
+    );
+  });
+
+  testWidgets('vision tracking interval can be selected before saving', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(const AddItemScreen()));
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('vision_tracking_switch')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('vision_tracking_switch')));
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('vision_interval_720')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('vision_interval_720')));
+    await tester.pump();
+    await _submitMinimalItem(tester);
+
+    expect(gateway.upsertedItemPayload?['vision_tracking_enabled'], isTrue);
+    expect(
+      gateway.upsertedItemPayload?['vision_measure_interval_minutes'],
+      720,
+    );
+  });
 }
 
 Widget _wrap(Widget child) {

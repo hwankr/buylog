@@ -215,6 +215,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             _buildProductHeader(),
             const SizedBox(height: 24),
             _buildReplacementCycle(),
+            if (_item.remainingQuantity != null) ...[
+              const SizedBox(height: 20),
+              _buildCurrentInventory(),
+            ],
             const SizedBox(height: 20),
             _buildPriceComparison(),
             const SizedBox(height: 20),
@@ -449,6 +453,76 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
                 ),
               ),
             ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentInventory() {
+    final confidence = _item.inventoryConfidence;
+    final observedAt = _item.inventoryObservedAt;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.inventory_2_outlined,
+                size: 18,
+                color: AppColors.primary,
+              ),
+              SizedBox(width: 8),
+              Text(
+                '현재 남은 수량',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${_item.remainingQuantity}개',
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.text,
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (confidence != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '신뢰도 ${(confidence * 100).round()}%',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (observedAt != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '마지막 확인 ${observedAt.year}.${observedAt.month.toString().padLeft(2, '0')}.${observedAt.day.toString().padLeft(2, '0')}',
+              style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+            ),
           ],
         ],
       ),

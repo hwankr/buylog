@@ -50,6 +50,8 @@ class AddItemScreen extends StatefulWidget {
 }
 
 class _AddItemScreenState extends State<AddItemScreen> {
+  static const List<int> _visionIntervalOptions = [60, 180, 360, 720, 1440];
+
   final _formKey = GlobalKey<FormState>();
 
   // 기본 정보 컨트롤러
@@ -65,6 +67,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
   // 이미지 상태
   Uint8List? _imageBytes; // 새로 선택한 이미지 bytes
   bool _isSaving = false;
+  bool _visionTrackingEnabled = false;
+  int _visionMeasureIntervalMinutes = 360;
 
   bool get _hasImageSelected =>
       _imageBytes != null || (_isEditing && widget.editItem!.imageUrl != null);
@@ -101,6 +105,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
       // 편집 모드: 기존 제품 데이터로 초기화
       _nameCtrl = TextEditingController(text: edit.name);
       _brandCtrl = TextEditingController(text: edit.brand);
+      _visionTrackingEnabled = edit.visionTrackingEnabled;
+      _visionMeasureIntervalMinutes = edit.visionMeasureIntervalMinutes;
       // 기존 카테고리가 드롭다운 목록에 없으면 첫 번째 항목으로 폴백
       _selectedCategory = categoryDefaultDays.containsKey(edit.category)
           ? edit.category
@@ -352,6 +358,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
               aiPredictedDays: duplicate.aiPredictedDays,
               aiConfidence: duplicate.aiConfidence,
               imageUrl: imageUrl ?? duplicate.imageUrl,
+              visionTrackingEnabled: duplicate.visionTrackingEnabled,
+              visionMeasureIntervalMinutes:
+                  duplicate.visionMeasureIntervalMinutes,
+              visionLastMeasuredAt: duplicate.visionLastMeasuredAt,
               purchaseHistory: [...duplicate.purchaseHistory, ...newPurchases],
             );
             await ItemStore.instance.update(merged, scope: _effectiveScope);
@@ -382,6 +392,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
         aiPredictedDays: _isEditing ? widget.editItem!.aiPredictedDays : null,
         aiConfidence: _isEditing ? widget.editItem!.aiConfidence : null,
         imageUrl: imageUrl,
+        visionTrackingEnabled: _visionTrackingEnabled,
+        visionMeasureIntervalMinutes: _visionMeasureIntervalMinutes,
+        visionLastMeasuredAt: _isEditing
+            ? widget.editItem!.visionLastMeasuredAt
+            : null,
         purchaseHistory: purchases,
       );
 
@@ -461,6 +476,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
               _sectionTitle('기본 정보'),
               const SizedBox(height: 12),
               _buildBasicInfoSection(),
+              const SizedBox(height: 24),
+              _sectionTitle('Vision 추적'),
+              const SizedBox(height: 12),
+              _buildVisionTrackingSection(),
               const SizedBox(height: 24),
               _sectionTitle('구매 이력'),
               const SizedBox(height: 4),
@@ -749,6 +768,92 @@ class _AddItemScreenState extends State<AddItemScreen> {
         _buildCycleDaysField(),
       ],
     );
+  }
+
+  Widget _buildVisionTrackingSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.visibility_outlined,
+                size: 20,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Vision 추적',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Switch(
+                key: const ValueKey('vision_tracking_switch'),
+                value: _visionTrackingEnabled,
+                activeThumbColor: AppColors.primary,
+                onChanged: (value) {
+                  setState(() => _visionTrackingEnabled = value);
+                },
+              ),
+            ],
+          ),
+          if (_visionTrackingEnabled) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final minutes in _visionIntervalOptions)
+                  ChoiceChip(
+                    key: ValueKey('vision_interval_$minutes'),
+                    label: Text(_visionIntervalLabel(minutes)),
+                    selected: _visionMeasureIntervalMinutes == minutes,
+                    onSelected: (_) {
+                      setState(() => _visionMeasureIntervalMinutes = minutes);
+                    },
+                    selectedColor: AppColors.primary,
+                    labelStyle: TextStyle(
+                      color: _visionMeasureIntervalMinutes == minutes
+                          ? Colors.white
+                          : AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      side: BorderSide(
+                        color: _visionMeasureIntervalMinutes == minutes
+                            ? AppColors.primary
+                            : AppColors.border,
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _visionIntervalLabel(int minutes) {
+    if (minutes % 60 == 0) {
+      return '${minutes ~/ 60}시간';
+    }
+    return '$minutes분';
   }
 
   Widget _labeledField({
