@@ -1,6 +1,7 @@
 import 'package:buylog/models/group.dart';
 import 'package:buylog/models/item.dart';
 import 'package:buylog/models/item_scope.dart';
+import 'package:buylog/models/manual_quantity_snapshot.dart';
 import 'package:buylog/screens/add_item_screen.dart';
 import 'package:buylog/services/group_store.dart';
 import 'package:buylog/services/item_store.dart';
@@ -247,4 +248,38 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
 
   @override
   Future<void> insertPurchase(Map<String, dynamic> payload) async {}
+
+  @override
+  Future<void> updatePurchase({
+    required String purchaseId,
+    required Map<String, dynamic> payload,
+  }) async {}
+
+  @override
+  Future<ManualQuantitySnapshot> setManualQuantity({
+    required String productItemId,
+    required int remainingQuantity,
+    required DateTime observedAt,
+  }) async {
+    return ManualQuantitySnapshot(
+      remainingQuantity: remainingQuantity,
+      confidence: 1,
+      sourceName: 'manual',
+      observedAt: observedAt,
+    );
+  }
+
+  @override
+  Future<ManualQuantitySnapshot> recordManualUsage({
+    required String productItemId,
+    required int usedQuantity,
+    required DateTime usedAt,
+  }) async {
+    return ManualQuantitySnapshot(
+      remainingQuantity: 0,
+      confidence: 1,
+      sourceName: 'manual',
+      observedAt: usedAt,
+    );
+  }
 }
