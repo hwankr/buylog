@@ -119,6 +119,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
             date: r.date,
             priceCtrl: TextEditingController(text: r.price.toString()),
             storeCtrl: TextEditingController(text: r.store),
+            quantityCtrl: TextEditingController(text: r.quantity.toString()),
           ),
         );
       }
@@ -135,6 +136,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           date: p?.purchaseDate ?? DateTime.now(),
           priceCtrl: TextEditingController(text: p?.price?.toString() ?? ''),
           storeCtrl: TextEditingController(text: p?.storeName ?? ''),
+          quantityCtrl: TextEditingController(text: '1'),
         ),
       );
     }
@@ -148,6 +150,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     for (final e in _purchases) {
       e.priceCtrl.dispose();
       e.storeCtrl.dispose();
+      e.quantityCtrl.dispose();
     }
     super.dispose();
   }
@@ -201,6 +204,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           date: DateTime.now(),
           priceCtrl: TextEditingController(),
           storeCtrl: TextEditingController(),
+          quantityCtrl: TextEditingController(text: '1'),
         ),
       );
     });
@@ -211,6 +215,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       final entry = _purchases.removeAt(index);
       entry.priceCtrl.dispose();
       entry.storeCtrl.dispose();
+      entry.quantityCtrl.dispose();
     });
   }
 
@@ -281,9 +286,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   ) ??
                   0,
               store: e.storeCtrl.text.trim(),
+              quantity: e.quantity,
             ),
           )
           .toList();
+
+      final newPurchaseQuantity = _purchases.fold<int>(
+        0,
+        (total, entry) => total + entry.quantity,
+      );
 
       final cycleDays =
           int.tryParse(_cycleDaysCtrl.text) ??
@@ -343,26 +354,24 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     date: p.date,
                     price: p.price,
                     store: p.store,
+                    quantity: p.quantity,
                   ),
                 )
                 .toList();
-            final merged = ConsumableItem(
-              id: duplicate.id,
-              name: duplicate.name,
-              brand: duplicate.brand,
-              category: duplicate.category,
-              icon: duplicate.icon,
-              daysRemaining: duplicate.daysRemaining,
-              cycleDays: duplicate.cycleDays,
-              progress: duplicate.progress,
-              aiPredictedDays: duplicate.aiPredictedDays,
-              aiConfidence: duplicate.aiConfidence,
+            final existingRemaining = duplicate.remainingQuantity;
+            final mergedRemainingQuantity = existingRemaining == null
+                ? duplicate.totalPurchasedQuantity + newPurchaseQuantity
+                : existingRemaining + newPurchaseQuantity;
+            final mergedPurchaseHistory =
+                List<PurchaseRecord>.of(duplicate.purchaseHistory)
+                  ..addAll(newPurchases);
+            final merged = duplicate.copyWith(
               imageUrl: imageUrl ?? duplicate.imageUrl,
-              visionTrackingEnabled: duplicate.visionTrackingEnabled,
-              visionMeasureIntervalMinutes:
-                  duplicate.visionMeasureIntervalMinutes,
-              visionLastMeasuredAt: duplicate.visionLastMeasuredAt,
-              purchaseHistory: [...duplicate.purchaseHistory, ...newPurchases],
+              remainingQuantity: mergedRemainingQuantity,
+              inventoryObservedAt: DateTime.now(),
+              inventoryConfidence: 1,
+              inventorySourceName: 'manual',
+              purchaseHistory: mergedPurchaseHistory,
             );
             await ItemStore.instance.update(merged, scope: _effectiveScope);
             if (mounted) {
@@ -397,6 +406,18 @@ class _AddItemScreenState extends State<AddItemScreen> {
         visionLastMeasuredAt: _isEditing
             ? widget.editItem!.visionLastMeasuredAt
             : null,
+        remainingQuantity: _isEditing
+            ? widget.editItem!.remainingQuantity
+            : newPurchaseQuantity,
+        inventoryObservedAt: _isEditing
+            ? widget.editItem!.inventoryObservedAt
+            : DateTime.now(),
+        inventoryConfidence: _isEditing
+            ? widget.editItem!.inventoryConfidence
+            : 1,
+        inventorySourceName: _isEditing
+            ? widget.editItem!.inventorySourceName
+            : 'manual',
         purchaseHistory: purchases,
       );
 
@@ -1115,7 +1136,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           ),
           const SizedBox(height: 12),
 
-          // 가격 + 매장명
+          // 가격 + 수량 + 매장명
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1131,14 +1152,30 @@ class _AddItemScreenState extends State<AddItemScreen> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                flex: 4,
+                flex: 2,
                 child: _compactField(
-                  label: '매장명',
-                  controller: entry.storeCtrl,
-                  hint: '예) 쿠팡',
+                  key: ValueKey('purchase_quantity_$index'),
+                  label: '수량',
+                  controller: entry.quantityCtrl,
+                  hint: '1',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (value) {
+                    final parsed = int.tryParse(value?.trim() ?? '');
+                    if (parsed == null || parsed < 1) {
+                      return '1개 이상';
+                    }
+                    return null;
+                  },
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          _compactField(
+            label: '매장명',
+            controller: entry.storeCtrl,
+            hint: '예) 쿠팡',
           ),
         ],
       ),
@@ -1146,11 +1183,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Widget _compactField({
+    Key? key,
     required String label,
     required TextEditingController controller,
     String? hint,
     TextInputType keyboardType = TextInputType.text,
     List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1165,9 +1204,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
         ),
         const SizedBox(height: 5),
         TextFormField(
+          key: key,
           controller: controller,
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
+          validator: validator,
           style: const TextStyle(fontSize: 14, color: AppColors.text),
           decoration: _inputDecoration(
             hint: hint,
@@ -1302,13 +1343,21 @@ class _PurchaseEntry {
   final DateTime date;
   final TextEditingController priceCtrl;
   final TextEditingController storeCtrl;
+  final TextEditingController quantityCtrl;
 
   _PurchaseEntry({
     this.id,
     required this.date,
     required this.priceCtrl,
     required this.storeCtrl,
+    required this.quantityCtrl,
   });
+
+  int get quantity {
+    final parsed = int.tryParse(quantityCtrl.text.trim());
+    if (parsed == null || parsed < 1) return 1;
+    return parsed;
+  }
 
   _PurchaseEntry copyWith({DateTime? date}) {
     return _PurchaseEntry(
@@ -1316,6 +1365,7 @@ class _PurchaseEntry {
       date: date ?? this.date,
       priceCtrl: priceCtrl,
       storeCtrl: storeCtrl,
+      quantityCtrl: quantityCtrl,
     );
   }
 }
