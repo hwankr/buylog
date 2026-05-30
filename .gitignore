@@ -46,6 +46,7 @@ app.*.map.json
 
 # env
 .env
+supabase/.temp/
 
 # MIDAS runtime artifacts
 hardware/MIDAS/uploads/
