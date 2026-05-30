@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart';
 import '../models/item.dart';
 import '../models/item_scope.dart';
 import 'supabase_service.dart';
+import 'daily_usage_service.dart';
+import 'ai/personal_regression_service.dart';
+import 'ai/regression_coefficients.dart';
 
 class ItemSaveEvent {
   const ItemSaveEvent({required this.scope, required this.serial});
@@ -44,6 +47,7 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
     if (scope.isGroup) {
       await SupabaseService.saveItem(item, scope: scope);
       _notifySaved(scope);
+      _triggerPersonalModelUpdate(item);
       return;
     }
 
@@ -52,6 +56,7 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
     try {
       await SupabaseService.saveItem(item, scope: scope);
       _notifySaved(scope);
+      _triggerPersonalModelUpdate(item);
     } catch (e) {
       value = List.of(previous);
       rethrow;
@@ -66,6 +71,7 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
     if (scope.isGroup) {
       await SupabaseService.saveItem(updated, scope: scope);
       _notifySaved(scope);
+      _triggerPersonalModelUpdate(updated);
       return;
     }
 
@@ -76,6 +82,7 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
     try {
       await SupabaseService.saveItem(updated, scope: scope);
       _notifySaved(scope);
+      _triggerPersonalModelUpdate(updated);
     } catch (e) {
       value = List.of(previous);
       rethrow;
@@ -123,5 +130,27 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
       scope: scope,
       serial: _saveEventSerial,
     );
+  }
+
+  /// 구매 이력 15회 이상이면 개인화 β 계수를 비동기로 업데이트한다.
+  void _triggerPersonalModelUpdate(ConsumableItem item) {
+    if (item.purchaseHistory.length < kPhase4Threshold) return;
+    final group =
+        ConsumableCycleCoefficients.categoryToGroup[item.category] ?? 'average';
+    final dailyUsage =
+        DailyUsageService.instance.getInternalValue(item.category) ??
+        (ConsumableCycleCoefficients.baseUsageRef[group] ?? 1.0);
+    final purchaseDates = item.purchaseHistory.map((p) => p.date).toList();
+    PersonalRegressionService.instance
+        .updateIfNeeded(
+          group: group,
+          purchaseDates: purchaseDates,
+          dailyUsage: dailyUsage,
+        )
+        .then((updated) {
+          if (updated) {
+            debugPrint('[ItemStore] Phase4 β 업데이트 완료: ${item.category}');
+          }
+        }, onError: (e) => debugPrint('[ItemStore] Phase4 β 업데이트 실패: $e'));
   }
 }
