@@ -101,6 +101,119 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
     }
   }
 
+  Future<ConsumableItem> recordManualUsage(
+    ConsumableItem item, {
+    int usedQuantity = 1,
+    DateTime? usedAt,
+  }) async {
+    if (usedQuantity < 1) {
+      throw ArgumentError.value(
+        usedQuantity,
+        'usedQuantity',
+        'Used quantity must be greater than zero.',
+      );
+    }
+
+    final current = findById(item.id) ?? item;
+    final remaining = current.remainingQuantity;
+    if (remaining != null && remaining < usedQuantity) {
+      throw StateError('남은 수량보다 많이 사용할 수 없습니다.');
+    }
+
+    final observedAt = usedAt ?? DateTime.now();
+    final previous = List<ConsumableItem>.unmodifiable(value);
+    final hasLocalItem = value.any((candidate) => candidate.id == current.id);
+
+    if (hasLocalItem && remaining != null) {
+      _replaceLocal(
+        current.copyWith(
+          remainingQuantity: remaining - usedQuantity,
+          inventoryObservedAt: observedAt,
+          inventoryConfidence: 1,
+          inventorySourceName: 'manual',
+        ),
+      );
+    }
+
+    try {
+      final snapshot = await SupabaseService.recordManualUsage(
+        productItemId: current.id,
+        usedQuantity: usedQuantity,
+        usedAt: observedAt,
+      );
+      final updated = current.copyWith(
+        remainingQuantity: snapshot.remainingQuantity,
+        inventoryObservedAt: snapshot.observedAt,
+        inventoryConfidence: snapshot.confidence,
+        inventorySourceName: snapshot.sourceName,
+      );
+      if (hasLocalItem) {
+        _replaceLocal(updated);
+      }
+      _notifySaved(_scopeFor(updated));
+      return updated;
+    } catch (_) {
+      if (hasLocalItem) {
+        value = List.of(previous);
+      }
+      rethrow;
+    }
+  }
+
+  Future<ConsumableItem> setManualQuantity(
+    ConsumableItem item, {
+    required int remainingQuantity,
+    DateTime? observedAt,
+  }) async {
+    if (remainingQuantity < 0) {
+      throw ArgumentError.value(
+        remainingQuantity,
+        'remainingQuantity',
+        'Remaining quantity must be zero or greater.',
+      );
+    }
+
+    final current = findById(item.id) ?? item;
+    final effectiveObservedAt = observedAt ?? DateTime.now();
+    final previous = List<ConsumableItem>.unmodifiable(value);
+    final hasLocalItem = value.any((candidate) => candidate.id == current.id);
+
+    if (hasLocalItem) {
+      _replaceLocal(
+        current.copyWith(
+          remainingQuantity: remainingQuantity,
+          inventoryObservedAt: effectiveObservedAt,
+          inventoryConfidence: 1,
+          inventorySourceName: 'manual',
+        ),
+      );
+    }
+
+    try {
+      final snapshot = await SupabaseService.setManualQuantity(
+        productItemId: current.id,
+        remainingQuantity: remainingQuantity,
+        observedAt: effectiveObservedAt,
+      );
+      final updated = current.copyWith(
+        remainingQuantity: snapshot.remainingQuantity,
+        inventoryObservedAt: snapshot.observedAt,
+        inventoryConfidence: snapshot.confidence,
+        inventorySourceName: snapshot.sourceName,
+      );
+      if (hasLocalItem) {
+        _replaceLocal(updated);
+      }
+      _notifySaved(_scopeFor(updated));
+      return updated;
+    } catch (_) {
+      if (hasLocalItem) {
+        value = List.of(previous);
+      }
+      rethrow;
+    }
+  }
+
   /// id로 제품 조회 (없으면 null)
   ConsumableItem? findById(String id) {
     final matches = value.where((item) => item.id == id);
@@ -130,6 +243,20 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
       scope: scope,
       serial: _saveEventSerial,
     );
+  }
+
+  void _replaceLocal(ConsumableItem updated) {
+    value = value
+        .map((item) => item.id == updated.id ? updated : item)
+        .toList(growable: false);
+  }
+
+  ItemScope _scopeFor(ConsumableItem item) {
+    final groupId = item.groupId;
+    if (groupId != null && groupId.isNotEmpty) {
+      return ItemScope.group(id: groupId, label: '그룹');
+    }
+    return const ItemScope.personal();
   }
 
   /// 구매 이력 15회 이상이면 개인화 β 계수를 비동기로 업데이트한다.

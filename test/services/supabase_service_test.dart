@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:buylog/models/group.dart';
 import 'package:buylog/models/item.dart';
 import 'package:buylog/models/item_scope.dart';
+import 'package:buylog/models/manual_quantity_snapshot.dart';
 import 'package:buylog/services/supabase_service.dart';
 
 class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
@@ -122,6 +123,14 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   String? ensureCategoryGroupId;
   Map<String, dynamic>? upsertedItemPayload;
   final List<Map<String, dynamic>> insertedPurchasePayloads = [];
+  final List<String> updatedPurchaseIds = [];
+  final List<Map<String, dynamic>> updatedPurchasePayloads = [];
+  String? manualQuantityProductItemId;
+  int? manualQuantityRemainingQuantity;
+  DateTime? manualQuantityObservedAt;
+  String? manualUsageProductItemId;
+  int? manualUsageUsedQuantity;
+  DateTime? manualUsageUsedAt;
   String ensuredCategoryId = 'category-1';
 
   @override
@@ -154,6 +163,49 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   @override
   Future<void> insertPurchase(Map<String, dynamic> payload) async {
     insertedPurchasePayloads.add(Map<String, dynamic>.from(payload));
+  }
+
+  @override
+  Future<void> updatePurchase({
+    required String purchaseId,
+    required Map<String, dynamic> payload,
+  }) async {
+    updatedPurchaseIds.add(purchaseId);
+    updatedPurchasePayloads.add(Map<String, dynamic>.from(payload));
+  }
+
+  @override
+  Future<ManualQuantitySnapshot> setManualQuantity({
+    required String productItemId,
+    required int remainingQuantity,
+    required DateTime observedAt,
+  }) async {
+    manualQuantityProductItemId = productItemId;
+    manualQuantityRemainingQuantity = remainingQuantity;
+    manualQuantityObservedAt = observedAt;
+    return ManualQuantitySnapshot(
+      remainingQuantity: remainingQuantity,
+      confidence: 1,
+      sourceName: 'manual',
+      observedAt: observedAt,
+    );
+  }
+
+  @override
+  Future<ManualQuantitySnapshot> recordManualUsage({
+    required String productItemId,
+    required int usedQuantity,
+    required DateTime usedAt,
+  }) async {
+    manualUsageProductItemId = productItemId;
+    manualUsageUsedQuantity = usedQuantity;
+    manualUsageUsedAt = usedAt;
+    return ManualQuantitySnapshot(
+      remainingQuantity: 4,
+      confidence: 1,
+      sourceName: 'manual',
+      observedAt: usedAt,
+    );
   }
 }
 
@@ -737,6 +789,117 @@ void main() {
         gateway.upsertedItemPayload?['vision_measure_interval_minutes'],
         720,
       );
+    });
+
+    test('inserts purchase quantity from PurchaseRecord', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      await SupabaseService.saveItem(
+        ConsumableItem(
+          id: 'item-quantity',
+          name: '칫솔',
+          brand: 'Brand',
+          category: '욕실/위생',
+          icon: ConsumableItem.iconForCategory('욕실/위생'),
+          daysRemaining: 30,
+          cycleDays: 30,
+          progress: 0,
+          remainingQuantity: 10,
+          purchaseHistory: <PurchaseRecord>[
+            PurchaseRecord(
+              date: DateTime(2026, 5, 30),
+              price: 12000,
+              store: 'Market',
+              quantity: 10,
+            ),
+          ],
+        ),
+      );
+
+      expect(gateway.insertedPurchasePayloads.single['quantity'], 10);
+      expect(gateway.manualQuantityProductItemId, 'item-quantity');
+      expect(gateway.manualQuantityRemainingQuantity, 10);
+    });
+
+    test(
+      'updates existing purchase quantity when purchase id is present',
+      () async {
+        final gateway = _RecordingItemDatabaseGateway();
+        SupabaseService.debugItemDatabaseGateway = gateway;
+
+        await SupabaseService.saveItem(
+          ConsumableItem(
+            id: 'item-existing',
+            name: '필터',
+            brand: 'Brand',
+            category: '가전/필터',
+            icon: ConsumableItem.iconForCategory('가전/필터'),
+            daysRemaining: 30,
+            cycleDays: 30,
+            progress: 0,
+            purchaseHistory: <PurchaseRecord>[
+              PurchaseRecord(
+                id: 'purchase-existing',
+                date: DateTime(2026, 5, 30),
+                price: 45000,
+                store: 'Market',
+                quantity: 3,
+              ),
+            ],
+          ),
+        );
+
+        expect(gateway.insertedPurchasePayloads, isEmpty);
+        expect(gateway.updatedPurchaseIds, <String>['purchase-existing']);
+        expect(gateway.updatedPurchasePayloads.single['quantity'], 3);
+        expect(
+          gateway.updatedPurchasePayloads.single.containsKey('purchased_by'),
+          isFalse,
+        );
+        expect(
+          gateway.updatedPurchasePayloads.single.containsKey('product_item_id'),
+          isFalse,
+        );
+      },
+    );
+  });
+
+  group('SupabaseService manual quantity sync', () {
+    tearDown(() {
+      SupabaseService.debugItemDatabaseGateway = null;
+    });
+
+    test('sets manual quantity through the item gateway', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final snapshot = await SupabaseService.setManualQuantity(
+        productItemId: 'item-1',
+        remainingQuantity: 8,
+        observedAt: DateTime.parse('2026-05-30T12:00:00.000Z'),
+      );
+
+      expect(gateway.manualQuantityProductItemId, 'item-1');
+      expect(gateway.manualQuantityRemainingQuantity, 8);
+      expect(snapshot.remainingQuantity, 8);
+      expect(snapshot.sourceName, 'manual');
+    });
+
+    test('records manual usage through the item gateway', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final snapshot = await SupabaseService.recordManualUsage(
+        productItemId: 'item-1',
+        usedQuantity: 1,
+        usedAt: DateTime.parse('2026-05-30T12:00:00.000Z'),
+      );
+
+      expect(gateway.manualUsageProductItemId, 'item-1');
+      expect(gateway.manualUsageUsedQuantity, 1);
+      expect(snapshot.remainingQuantity, 4);
+      expect(snapshot.sourceName, 'manual');
     });
   });
 

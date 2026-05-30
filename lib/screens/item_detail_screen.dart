@@ -18,6 +18,71 @@ typedef PriceComparisonGateway =
       required int display,
     });
 
+class _ManualQuantityDialog extends StatefulWidget {
+  const _ManualQuantityDialog({required this.initialQuantity});
+
+  final int initialQuantity;
+
+  @override
+  State<_ManualQuantityDialog> createState() => _ManualQuantityDialogState();
+}
+
+class _ManualQuantityDialogState extends State<_ManualQuantityDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: widget.initialQuantity.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pop(context, int.parse(_controller.text.trim()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('수량 맞추기'),
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          key: const ValueKey('manual_quantity_input'),
+          controller: _controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: '현재 남은 수량'),
+          validator: (value) {
+            final parsed = int.tryParse(value?.trim() ?? '');
+            if (parsed == null || parsed < 0) {
+              return '0개 이상 입력해주세요.';
+            }
+            return null;
+          },
+          onFieldSubmitted: (_) => _submit(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('저장')),
+      ],
+    );
+  }
+}
+
 class ItemDetailScreen extends StatefulWidget {
   final ConsumableItem item;
   final PriceComparisonGateway? priceComparisonGateway;
@@ -41,6 +106,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   bool _isLoadingPrice = true;
   List<PriceComparison> _realPriceData = [];
   String? _priceErrorMessage;
+  bool _isSavingQuantity = false;
 
   @override
   void initState() {
@@ -112,6 +178,75 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       }
     } catch (e) {
       debugPrint('링크 실행 중 에러 발생: $e');
+    }
+  }
+
+  Future<void> _recordManualUseOne() async {
+    final remainingQuantity =
+        _item.remainingQuantity ?? _item.totalPurchasedQuantity;
+    if (_isSavingQuantity || remainingQuantity <= 0) {
+      return;
+    }
+
+    setState(() => _isSavingQuantity = true);
+    try {
+      final updated = await ItemStore.instance.recordManualUsage(
+        _item,
+        usedQuantity: 1,
+      );
+      if (mounted) {
+        setState(() => _item = updated);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('수량을 동기화하지 못했습니다. 잠시 후 다시 시도해주세요.'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingQuantity = false);
+      }
+    }
+  }
+
+  Future<void> _openManualQuantityDialog() async {
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (_) => _ManualQuantityDialog(
+        initialQuantity:
+            _item.remainingQuantity ?? _item.totalPurchasedQuantity,
+      ),
+    );
+
+    if (selected == null) return;
+    setState(() => _isSavingQuantity = true);
+    try {
+      final updated = await ItemStore.instance.setManualQuantity(
+        _item,
+        remainingQuantity: selected,
+      );
+      if (mounted) {
+        setState(() => _item = updated);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('수량을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingQuantity = false);
+      }
     }
   }
 
@@ -215,10 +350,12 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             _buildProductHeader(),
             const SizedBox(height: 24),
             _buildReplacementCycle(),
-            if (_item.remainingQuantity != null) ...[
-              const SizedBox(height: 20),
-              _buildCurrentInventory(),
-            ],
+            if (_item.remainingQuantity != null ||
+                _item.purchaseHistory.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: _buildCurrentInventory(),
+              ),
             const SizedBox(height: 20),
             _buildPriceComparison(),
             const SizedBox(height: 20),
@@ -462,6 +599,8 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   Widget _buildCurrentInventory() {
     final confidence = _item.inventoryConfidence;
     final observedAt = _item.inventoryObservedAt;
+    final remainingQuantity =
+        _item.remainingQuantity ?? _item.totalPurchasedQuantity;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -496,7 +635,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${_item.remainingQuantity}개',
+                '$remainingQuantity개',
                 style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
@@ -524,6 +663,38 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
               style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
             ),
           ],
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  key: const ValueKey('manual_use_one_button'),
+                  onPressed: _isSavingQuantity || remainingQuantity <= 0
+                      ? null
+                      : _recordManualUseOne,
+                  icon: _isSavingQuantity
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.remove_circle_outline, size: 18),
+                  label: const Text('1개 사용'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                key: const ValueKey('manual_set_quantity_button'),
+                onPressed: _isSavingQuantity ? null : _openManualQuantityDialog,
+                icon: const Icon(Icons.sync, size: 18),
+                label: const Text('맞추기'),
+              ),
+            ],
+          ),
         ],
       ),
     );

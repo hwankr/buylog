@@ -1,6 +1,7 @@
 import 'package:buylog/models/group.dart';
 import 'package:buylog/models/item.dart';
 import 'package:buylog/models/item_scope.dart';
+import 'package:buylog/models/manual_quantity_snapshot.dart';
 import 'package:buylog/screens/add_item_screen.dart';
 import 'package:buylog/services/group_store.dart';
 import 'package:buylog/services/item_store.dart';
@@ -185,6 +186,46 @@ void main() {
       720,
     );
   });
+
+  testWidgets('purchase quantity defaults to one when adding an item', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(const AddItemScreen()));
+
+    expect(find.byKey(const ValueKey('purchase_quantity_0')), findsOneWidget);
+    expect(
+      tester
+          .widget<TextFormField>(
+            find.byKey(const ValueKey('purchase_quantity_0')),
+          )
+          .controller
+          ?.text,
+      '1',
+    );
+
+    await _submitMinimalItem(tester);
+
+    expect(gateway.insertedPurchasePayloads.single['quantity'], 1);
+    expect(gateway.manualQuantityRemainingQuantity, 1);
+  });
+
+  testWidgets('entered purchase quantity is saved and initializes inventory', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(const AddItemScreen()));
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('purchase_quantity_0')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('purchase_quantity_0')),
+      '10',
+    );
+    await _submitMinimalItem(tester);
+
+    expect(gateway.insertedPurchasePayloads.single['quantity'], 10);
+    expect(gateway.manualQuantityRemainingQuantity, 10);
+  });
 }
 
 Widget _wrap(Widget child) {
@@ -215,13 +256,16 @@ Future<void> _submitMinimalItem(WidgetTester tester) async {
   await tester.enterText(find.byType(TextFormField).at(1), 'Coway');
   await tester.enterText(find.byType(TextFormField).at(2), '30');
   await tester.enterText(find.byType(TextFormField).at(3), '8900');
-  await tester.enterText(find.byType(TextFormField).at(4), 'Market');
+  await tester.enterText(find.byType(TextFormField).at(5), 'Market');
   await tester.tap(find.byType(FilledButton).last);
   await tester.pumpAndSettle();
 }
 
 class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   Map<String, dynamic>? upsertedItemPayload;
+  final List<Map<String, dynamic>> insertedPurchasePayloads = [];
+  String? manualQuantityProductItemId;
+  int? manualQuantityRemainingQuantity;
 
   @override
   Future<List<Map<String, dynamic>>> loadItems({
@@ -246,5 +290,43 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   }
 
   @override
-  Future<void> insertPurchase(Map<String, dynamic> payload) async {}
+  Future<void> insertPurchase(Map<String, dynamic> payload) async {
+    insertedPurchasePayloads.add(Map<String, dynamic>.from(payload));
+  }
+
+  @override
+  Future<void> updatePurchase({
+    required String purchaseId,
+    required Map<String, dynamic> payload,
+  }) async {}
+
+  @override
+  Future<ManualQuantitySnapshot> setManualQuantity({
+    required String productItemId,
+    required int remainingQuantity,
+    required DateTime observedAt,
+  }) async {
+    manualQuantityProductItemId = productItemId;
+    manualQuantityRemainingQuantity = remainingQuantity;
+    return ManualQuantitySnapshot(
+      remainingQuantity: remainingQuantity,
+      confidence: 1,
+      sourceName: 'manual',
+      observedAt: observedAt,
+    );
+  }
+
+  @override
+  Future<ManualQuantitySnapshot> recordManualUsage({
+    required String productItemId,
+    required int usedQuantity,
+    required DateTime usedAt,
+  }) async {
+    return ManualQuantitySnapshot(
+      remainingQuantity: 0,
+      confidence: 1,
+      sourceName: 'manual',
+      observedAt: usedAt,
+    );
+  }
 }

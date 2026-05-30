@@ -1,20 +1,26 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:buylog/models/item.dart';
 import 'package:buylog/models/item_scope.dart';
+import 'package:buylog/models/manual_quantity_snapshot.dart';
 import 'package:buylog/services/item_store.dart';
 import 'package:buylog/services/supabase_service.dart';
 
-ConsumableItem _seed(String id, {String name = 'X', int days = 10}) =>
-    ConsumableItem(
-      id: id,
-      name: name,
-      brand: 'B',
-      category: '기타',
-      icon: ConsumableItem.iconForCategory('기타'),
-      daysRemaining: days,
-      cycleDays: 30,
-      progress: 0.5,
-    );
+ConsumableItem _seed(
+  String id, {
+  String name = 'X',
+  int days = 10,
+  int? remainingQuantity,
+}) => ConsumableItem(
+  id: id,
+  name: name,
+  brand: 'B',
+  category: '기타',
+  icon: ConsumableItem.iconForCategory('기타'),
+  daysRemaining: days,
+  cycleDays: 30,
+  progress: 0.5,
+  remainingQuantity: remainingQuantity,
+);
 
 void main() {
   group('ItemStore rollback', () {
@@ -110,12 +116,72 @@ void main() {
       expect(group?.id, 'group-item');
       expect(otherGroup, isNull);
     });
+
+    test('recordManualUsage updates local remaining quantity', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+      addTearDown(() => SupabaseService.debugItemDatabaseGateway = null);
+      ItemStore.instance.value = [_seed('a', remainingQuantity: 3)];
+
+      final updated = await ItemStore.instance.recordManualUsage(
+        ItemStore.instance.value.single,
+        usedQuantity: 1,
+        usedAt: DateTime.parse('2026-05-30T12:00:00.000Z'),
+      );
+
+      expect(gateway.manualUsageProductItemId, 'a');
+      expect(gateway.manualUsageUsedQuantity, 1);
+      expect(updated.remainingQuantity, 2);
+      expect(ItemStore.instance.value.single.remainingQuantity, 2);
+    });
+
+    test('recordManualUsage rejects counts below zero before saving', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+      addTearDown(() => SupabaseService.debugItemDatabaseGateway = null);
+      ItemStore.instance.value = [_seed('a', remainingQuantity: 0)];
+
+      await expectLater(
+        ItemStore.instance.recordManualUsage(
+          ItemStore.instance.value.single,
+          usedQuantity: 1,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(gateway.manualUsageProductItemId, isNull);
+      expect(ItemStore.instance.value.single.remainingQuantity, 0);
+    });
+
+    test(
+      'recordManualUsage rolls back local quantity on Supabase failure',
+      () async {
+        final gateway = _RecordingItemDatabaseGateway()
+          ..manualUsageError = StateError('rpc failed');
+        SupabaseService.debugItemDatabaseGateway = gateway;
+        addTearDown(() => SupabaseService.debugItemDatabaseGateway = null);
+        ItemStore.instance.value = [_seed('a', remainingQuantity: 3)];
+
+        await expectLater(
+          ItemStore.instance.recordManualUsage(
+            ItemStore.instance.value.single,
+            usedQuantity: 1,
+          ),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(ItemStore.instance.value.single.remainingQuantity, 3);
+      },
+    );
   });
 }
 
 class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   Object? saveError;
+  Object? manualUsageError;
   Map<String, dynamic>? upsertedItemPayload;
+  String? manualUsageProductItemId;
+  int? manualUsageUsedQuantity;
 
   @override
   Future<List<Map<String, dynamic>>> loadItems({
@@ -142,4 +208,41 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
 
   @override
   Future<void> insertPurchase(Map<String, dynamic> payload) async {}
+
+  @override
+  Future<void> updatePurchase({
+    required String purchaseId,
+    required Map<String, dynamic> payload,
+  }) async {}
+
+  @override
+  Future<ManualQuantitySnapshot> setManualQuantity({
+    required String productItemId,
+    required int remainingQuantity,
+    required DateTime observedAt,
+  }) async {
+    return ManualQuantitySnapshot(
+      remainingQuantity: remainingQuantity,
+      confidence: 1,
+      sourceName: 'manual',
+      observedAt: observedAt,
+    );
+  }
+
+  @override
+  Future<ManualQuantitySnapshot> recordManualUsage({
+    required String productItemId,
+    required int usedQuantity,
+    required DateTime usedAt,
+  }) async {
+    if (manualUsageError != null) throw manualUsageError!;
+    manualUsageProductItemId = productItemId;
+    manualUsageUsedQuantity = usedQuantity;
+    return ManualQuantitySnapshot(
+      remainingQuantity: 2,
+      confidence: 1,
+      sourceName: 'manual',
+      observedAt: usedAt,
+    );
+  }
 }
