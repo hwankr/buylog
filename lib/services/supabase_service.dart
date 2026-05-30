@@ -334,9 +334,7 @@ class SupabaseService {
       });
 
       for (final record in item.purchaseHistory) {
-        final payload = {
-          'product_item_id': item.id,
-          'purchased_by': uid,
+        final purchasePayload = {
           'purchase_date': record.date.toIso8601String().substring(0, 10),
           'price': record.price,
           'store_name': record.store,
@@ -344,11 +342,15 @@ class SupabaseService {
         };
 
         if (record.id == null) {
-          await _itemDatabaseGateway.insertPurchase(payload);
+          await _itemDatabaseGateway.insertPurchase({
+            'product_item_id': item.id,
+            'purchased_by': uid,
+            ...purchasePayload,
+          });
         } else {
           await _itemDatabaseGateway.updatePurchase(
             purchaseId: record.id!,
-            payload: payload,
+            payload: purchasePayload,
           );
         }
       }

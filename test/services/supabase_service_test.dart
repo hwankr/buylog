@@ -853,6 +853,14 @@ void main() {
         expect(gateway.insertedPurchasePayloads, isEmpty);
         expect(gateway.updatedPurchaseIds, <String>['purchase-existing']);
         expect(gateway.updatedPurchasePayloads.single['quantity'], 3);
+        expect(
+          gateway.updatedPurchasePayloads.single.containsKey('purchased_by'),
+          isFalse,
+        );
+        expect(
+          gateway.updatedPurchasePayloads.single.containsKey('product_item_id'),
+          isFalse,
+        );
       },
     );
   });
