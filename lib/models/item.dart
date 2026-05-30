@@ -51,6 +51,68 @@ class ConsumableItem {
     this.visionLastMeasuredAt,
   });
 
+  int get totalPurchasedQuantity {
+    return purchaseHistory.fold<int>(
+      0,
+      (total, record) => total + record.quantity,
+    );
+  }
+
+  ConsumableItem copyWith({
+    String? id,
+    String? name,
+    String? brand,
+    String? category,
+    IconData? icon,
+    int? daysRemaining,
+    int? cycleDays,
+    double? progress,
+    int? aiPredictedDays,
+    double? aiConfidence,
+    List<PurchaseRecord>? purchaseHistory,
+    String? imageUrl,
+    String? groupId,
+    String? registeredBy,
+    String? registeredByDisplayName,
+    String? registeredByEmail,
+    int? remainingQuantity,
+    DateTime? inventoryObservedAt,
+    double? inventoryConfidence,
+    String? inventorySourceName,
+    bool? visionTrackingEnabled,
+    int? visionMeasureIntervalMinutes,
+    DateTime? visionLastMeasuredAt,
+  }) {
+    return ConsumableItem(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      brand: brand ?? this.brand,
+      category: category ?? this.category,
+      icon: icon ?? this.icon,
+      daysRemaining: daysRemaining ?? this.daysRemaining,
+      cycleDays: cycleDays ?? this.cycleDays,
+      progress: progress ?? this.progress,
+      aiPredictedDays: aiPredictedDays ?? this.aiPredictedDays,
+      aiConfidence: aiConfidence ?? this.aiConfidence,
+      purchaseHistory: purchaseHistory ?? this.purchaseHistory,
+      imageUrl: imageUrl ?? this.imageUrl,
+      groupId: groupId ?? this.groupId,
+      registeredBy: registeredBy ?? this.registeredBy,
+      registeredByDisplayName:
+          registeredByDisplayName ?? this.registeredByDisplayName,
+      registeredByEmail: registeredByEmail ?? this.registeredByEmail,
+      remainingQuantity: remainingQuantity ?? this.remainingQuantity,
+      inventoryObservedAt: inventoryObservedAt ?? this.inventoryObservedAt,
+      inventoryConfidence: inventoryConfidence ?? this.inventoryConfidence,
+      inventorySourceName: inventorySourceName ?? this.inventorySourceName,
+      visionTrackingEnabled:
+          visionTrackingEnabled ?? this.visionTrackingEnabled,
+      visionMeasureIntervalMinutes:
+          visionMeasureIntervalMinutes ?? this.visionMeasureIntervalMinutes,
+      visionLastMeasuredAt: visionLastMeasuredAt ?? this.visionLastMeasuredAt,
+    );
+  }
+
   String? get registeredByLabel {
     final displayName = registeredByDisplayName?.trim();
     if (displayName != null && displayName.isNotEmpty) {
@@ -166,6 +228,9 @@ class ConsumableItem {
               date: DateTime.parse(p['purchase_date']),
               price: (p['price'] as int?) ?? 0,
               store: (p['store_name'] as String?) ?? '',
+              quantity: ((p['quantity'] as num?)?.toInt() ?? 1)
+                  .clamp(1, 9999)
+                  .toInt(),
             ),
           )
           .toList(),
@@ -203,13 +268,15 @@ class PurchaseRecord {
   final DateTime date;
   final int price;
   final String store;
+  final int quantity;
 
   const PurchaseRecord({
     this.id,
     required this.date,
     required this.price,
     required this.store,
-  });
+    this.quantity = 1,
+  }) : assert(quantity > 0);
 }
 
 class GroupMember {
