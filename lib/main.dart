@@ -1,121 +1,384 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
-void main() {
-  runApp(const MyApp());
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'models/item_scope.dart';
+import 'theme/app_theme.dart';
+import 'screens/home_screen.dart';
+import 'screens/group_screen.dart';
+import 'screens/items_screen.dart';
+import 'screens/scan_screen.dart';
+import 'screens/reports_screen.dart';
+import 'screens/settings_screen.dart';
+import 'screens/add_item_screen.dart';
+import 'services/group_store.dart';
+import 'services/supabase_service.dart';
+import 'services/item_store.dart';
+import 'services/daily_usage_service.dart';
+import 'services/ai/personal_regression_service.dart';
+
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
+
+  await bootstrapApp();
+  runApp(const BuylogApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+Future<void> bootstrapApp() async {
+  await SupabaseService.initialize();
+  await DailyUsageService.instance.initialize();
+  await PersonalRegressionService.instance.initialize();
+  await ItemStore.instance.initialize();
+  await preloadGroupForStartup();
+  unawaited(loadEnvironmentForStartup());
+}
 
-  // This widget is the root of your application.
+Future<void> loadEnvironmentForStartup({
+  String fileName = '.env',
+  Future<void> Function()? load,
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  try {
+    final loadEnv =
+        load ?? () => dotenv.load(fileName: fileName, isOptional: true);
+    await loadEnv().timeout(timeout);
+  } catch (error) {
+    debugPrint('[bootstrap] Environment load skipped: $error');
+  }
+}
+
+Future<void> preloadGroupForStartup() async {
+  try {
+    await GroupStore.instance.initialize();
+  } catch (error) {
+    debugPrint('[bootstrap] Group preload failed: $error');
+  }
+}
+
+class BuylogApp extends StatelessWidget {
+  const BuylogApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      title: 'Buylog',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      // 한국어 Date Picker 및 기타 위젯 지원
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+      locale: const Locale('ko', 'KR'),
+      home: const MainNavigation(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class MainNavigation extends StatefulWidget {
+  const MainNavigation({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<MainNavigation> createState() => MainNavigationState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+/// 하단 탭 셸. 자식 화면이 `findAncestorStateOfType<MainNavigationState>()`로
+/// 찾아서 `switchTab(...)`을 호출할 수 있도록 의도적으로 public 이다.
+class MainNavigationState extends State<MainNavigation> {
+  int _currentIndex = 0;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  /// 자식 화면이 탭 전환 시 참조할 수 있도록 노출하는 인덱스 상수.
+  static const int kItemsTabIndex = 2;
+
+  static const _tabs = <_TabSpec>[
+    _TabSpec('홈', Icons.home_outlined, Icons.home),
+    _TabSpec('그룹', Icons.group_outlined, Icons.group),
+    _TabSpec('모든 제품', Icons.list_alt_outlined, Icons.list_alt),
+    _TabSpec('리포트', Icons.bar_chart_outlined, Icons.bar_chart),
+    _TabSpec('설정', Icons.settings_outlined, Icons.settings),
+  ];
+
+  /// 자식 화면이 탭 인덱스를 강제 전환할 때 사용한다 (예: 홈의 "모두 보기").
+  void switchTab(int index) {
+    if (index < 0 || index >= _tabs.length) return;
+    setState(() => _currentIndex = index);
+  }
+
+  ItemScope _currentAddScope(GroupState groupState) {
+    if (_currentIndex != 1) {
+      return const ItemScope.personal();
+    }
+
+    return groupState.selectedGroupScope ?? const ItemScope.personal();
+  }
+
+  bool _shouldShowFab(GroupState groupState) {
+    return switch (_currentIndex) {
+      0 => true,
+      1 => groupState.selectedGroupScope != null,
+      2 => true,
+      _ => false,
+    };
+  }
+
+  Widget _screenAt(int index) => switch (index) {
+    0 => const HomeScreen(),
+    1 => const GroupScreen(),
+    2 => const ItemsScreen(),
+    3 => const ReportsScreen(),
+    4 => const SettingsScreen(),
+    _ => throw StateError('No screen registered for tab $index'),
+  };
+
+  Future<void> _openAddSheet(GroupState groupState) async {
+    final choice = await showModalBottomSheet<_AddChoice>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (_) => const _AddActionSheet(),
+    );
+    if (!mounted || choice == null) return;
+    final targetScope = _currentAddScope(groupState);
+    switch (choice) {
+      case _AddChoice.scan:
+        // ScanScreen 코드는 변경하지 않음. 자체 헤더가 있으니 AppBar 없이
+        // 그대로 push하고 floating close 버튼만 얹는다.
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (ctx) => Scaffold(
+              backgroundColor: AppColors.background,
+              body: Stack(
+                children: [
+                  ScanScreen(targetScope: targetScope),
+                  Positioned(
+                    top: MediaQuery.of(ctx).padding.top + 8,
+                    right: 12,
+                    child: Material(
+                      color: AppColors.surface,
+                      shape: const CircleBorder(),
+                      elevation: 1,
+                      child: IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        color: AppColors.text,
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      case _AddChoice.manual:
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AddItemScreen(targetScope: targetScope),
+          ),
+        );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+    return ValueListenableBuilder<GroupState>(
+      valueListenable: GroupStore.instance,
+      builder: (context, groupState, _) {
+        final showFab = _shouldShowFab(groupState);
+
+        return Scaffold(
+          body: IndexedStack(
+            index: _currentIndex,
+            children: [for (var i = 0; i < _tabs.length; i++) _screenAt(i)],
+          ),
+          floatingActionButton: showFab
+              ? FloatingActionButton(
+                  onPressed: () => _openAddSheet(groupState),
+                  backgroundColor: AppColors.success,
+                  foregroundColor: Colors.white,
+                  elevation: 6,
+                  tooltip: '제품 추가',
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(Icons.add, size: 26),
+                )
+              : null,
+          bottomNavigationBar: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(
+                top: BorderSide(color: AppColors.border, width: 0.5),
+              ),
             ),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: switchTab,
+              items: [
+                for (final t in _tabs)
+                  BottomNavigationBarItem(
+                    icon: Icon(t.icon),
+                    activeIcon: Icon(t.activeIcon),
+                    label: t.label,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TabSpec {
+  const _TabSpec(this.label, this.icon, this.activeIcon);
+  final String label;
+  final IconData icon;
+  final IconData activeIcon;
+}
+
+enum _AddChoice { scan, manual }
+
+class _AddActionSheet extends StatelessWidget {
+  const _AddActionSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const _SheetAction(
+              choice: _AddChoice.scan,
+              icon: Icons.photo_camera_outlined,
+              accent: AppColors.primary,
+              title: '카메라 스캔',
+              sub: '영수증·라벨을 찍으면 자동 인식',
+            ),
+            const SizedBox(height: 10),
+            const _SheetAction(
+              choice: _AddChoice.manual,
+              icon: Icons.edit_outlined,
+              accent: AppColors.textSecondary,
+              title: '직접 등록',
+              sub: '이름·주기를 직접 입력',
+            ),
+            const SizedBox(height: 4),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+    );
+  }
+}
+
+class _SheetAction extends StatelessWidget {
+  const _SheetAction({
+    required this.choice,
+    required this.icon,
+    required this.accent,
+    required this.title,
+    required this.sub,
+  });
+
+  final _AddChoice choice;
+  final IconData icon;
+  final Color accent;
+  final String title;
+  final String sub;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => Navigator.of(context).pop(choice),
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border, width: 0.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.text,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      sub,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: AppColors.textMuted,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
