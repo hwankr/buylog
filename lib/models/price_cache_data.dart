@@ -2,12 +2,12 @@ import '../models/item.dart'; // PriceComparison 사용
 
 class PriceCacheData {
   final List<PriceComparison> priceData;
-  final String buyLink;
+  final List<String> buyLinks;
   final DateTime fetchedAt;
 
   PriceCacheData({
     required this.priceData,
-    required this.buyLink,
+    required this.buyLinks,
     required this.fetchedAt,
   });
 
