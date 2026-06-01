@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:buylog/models/group.dart';
 import 'package:buylog/models/item.dart';
 import 'package:buylog/models/item_scope.dart';
+import 'package:buylog/models/manual_quantity_snapshot.dart';
 import 'package:buylog/services/supabase_service.dart';
 
 class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
@@ -14,11 +15,14 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int createGroupWithOwnerCalls = 0;
   int loadGroupMembersCalls = 0;
   int leaveGroupCalls = 0;
+  int renameGroupCalls = 0;
   String? createGroupWithOwnerName;
   String? createGroupWithOwnerInviteCode;
   String? loadGroupMembersGroupId;
   String? leaveGroupGroupId;
   String? leaveGroupNewOwnerUserId;
+  String? renameGroupGroupId;
+  String? renameGroupName;
   Map<String, dynamic>? loadDefaultGroupResult;
   List<Map<String, dynamic>> loadGroupsForUserResult = const [];
   Map<String, dynamic>? createGroupWithOwnerResult;
@@ -73,6 +77,24 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   }
 
   @override
+  Future<Map<String, dynamic>> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    renameGroupCalls += 1;
+    renameGroupGroupId = groupId;
+    renameGroupName = name;
+    return <String, dynamic>{
+      'id': groupId,
+      'name': name,
+      'invite_code': 'BUY-ABC123',
+      'created_by': SupabaseService.currentUserId,
+      'created_at': '2026-05-26T00:00:00.000Z',
+      'group_members': <Map<String, dynamic>>[],
+    };
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> loadGroupMembers({
     required String groupId,
   }) async {
@@ -101,6 +123,14 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   String? ensureCategoryGroupId;
   Map<String, dynamic>? upsertedItemPayload;
   final List<Map<String, dynamic>> insertedPurchasePayloads = [];
+  final List<String> updatedPurchaseIds = [];
+  final List<Map<String, dynamic>> updatedPurchasePayloads = [];
+  String? manualQuantityProductItemId;
+  int? manualQuantityRemainingQuantity;
+  DateTime? manualQuantityObservedAt;
+  String? manualUsageProductItemId;
+  int? manualUsageUsedQuantity;
+  DateTime? manualUsageUsedAt;
   String ensuredCategoryId = 'category-1';
 
   @override
@@ -134,6 +164,49 @@ class _RecordingItemDatabaseGateway implements ItemDatabaseGateway {
   Future<void> insertPurchase(Map<String, dynamic> payload) async {
     insertedPurchasePayloads.add(Map<String, dynamic>.from(payload));
   }
+
+  @override
+  Future<void> updatePurchase({
+    required String purchaseId,
+    required Map<String, dynamic> payload,
+  }) async {
+    updatedPurchaseIds.add(purchaseId);
+    updatedPurchasePayloads.add(Map<String, dynamic>.from(payload));
+  }
+
+  @override
+  Future<ManualQuantitySnapshot> setManualQuantity({
+    required String productItemId,
+    required int remainingQuantity,
+    required DateTime observedAt,
+  }) async {
+    manualQuantityProductItemId = productItemId;
+    manualQuantityRemainingQuantity = remainingQuantity;
+    manualQuantityObservedAt = observedAt;
+    return ManualQuantitySnapshot(
+      remainingQuantity: remainingQuantity,
+      confidence: 1,
+      sourceName: 'manual',
+      observedAt: observedAt,
+    );
+  }
+
+  @override
+  Future<ManualQuantitySnapshot> recordManualUsage({
+    required String productItemId,
+    required int usedQuantity,
+    required DateTime usedAt,
+  }) async {
+    manualUsageProductItemId = productItemId;
+    manualUsageUsedQuantity = usedQuantity;
+    manualUsageUsedAt = usedAt;
+    return ManualQuantitySnapshot(
+      remainingQuantity: 4,
+      confidence: 1,
+      sourceName: 'manual',
+      observedAt: usedAt,
+    );
+  }
 }
 
 Map<String, dynamic> _itemRow({
@@ -150,6 +223,9 @@ Map<String, dynamic> _itemRow({
     'brand': '브랜드',
     'image_url': null,
     'replacement_cycle_days': 30,
+    'vision_tracking_enabled': false,
+    'vision_measure_interval_minutes': 360,
+    'vision_last_measured_at': null,
     'created_at': '2026-05-26T00:00:00.000Z',
     'categories': <String, dynamic>{'id': 'category-1', 'name': '주방/세제'},
     'purchases': <Map<String, dynamic>>[
@@ -161,6 +237,7 @@ Map<String, dynamic> _itemRow({
       },
     ],
     'ai_predictions': <Map<String, dynamic>>[],
+    'product_inventory_snapshots': <Map<String, dynamic>>[],
   };
 }
 
@@ -291,6 +368,64 @@ void main() {
       expect(gateway.createGroupWithOwnerCalls, 1);
       expect(gateway.createGroupWithOwnerName, 'Group Name');
       expect(gateway.loadDefaultGroupCalls, 0);
+    });
+  });
+
+  group('SupabaseService.renameGroup', () {
+    tearDown(() {
+      SupabaseService.debugGroupDatabaseGateway = null;
+    });
+
+    test('trims group id and name before gateway update', () async {
+      final gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      final group = await SupabaseService.renameGroup(
+        groupId: ' group-1 ',
+        name: '  새 가족  ',
+      );
+
+      expect(gateway.renameGroupCalls, 1);
+      expect(gateway.renameGroupGroupId, 'group-1');
+      expect(gateway.renameGroupName, '새 가족');
+      expect(group.id, 'group-1');
+      expect(group.name, '새 가족');
+    });
+
+    test('rejects blank group ids without calling gateway', () async {
+      final gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      await expectLater(
+        SupabaseService.renameGroup(groupId: '   ', name: '새 가족'),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.message,
+            'message',
+            'Group id is required.',
+          ),
+        ),
+      );
+
+      expect(gateway.renameGroupCalls, 0);
+    });
+
+    test('rejects blank names without calling gateway', () async {
+      final gateway = _RecordingGroupDatabaseGateway();
+      SupabaseService.debugGroupDatabaseGateway = gateway;
+
+      await expectLater(
+        SupabaseService.renameGroup(groupId: 'group-1', name: '   '),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.message,
+            'message',
+            'Group name is required.',
+          ),
+        ),
+      );
+
+      expect(gateway.renameGroupCalls, 0);
     });
   });
 
@@ -443,6 +578,119 @@ void main() {
       expect(gateway.lastUserId, isNull);
       expect(gateway.lastGroupId, 'group-1');
     });
+
+    test('maps registered user display data for group items', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'group-item-1', groupId: 'group-1')
+            ..['registered_by_user'] = <String, dynamic>{
+              'id': SupabaseService.currentUserId,
+              'display_name': 'Minseo',
+              'email': 'minseo@example.com',
+            },
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.group(id: 'group-1', label: 'Family'),
+      );
+
+      expect(items.single.registeredBy, SupabaseService.currentUserId);
+      expect(items.single.registeredByDisplayName, 'Minseo');
+      expect(items.single.registeredByEmail, 'minseo@example.com');
+      expect(items.single.registeredByLabel, 'Minseo');
+    });
+
+    test(
+      'uses registered user email as label when display name is blank',
+      () async {
+        final gateway = _RecordingItemDatabaseGateway()
+          ..loadItemsResult = <Map<String, dynamic>>[
+            _itemRow(id: 'group-item-1', groupId: 'group-1')
+              ..['registered_by_user'] = <String, dynamic>{
+                'id': SupabaseService.currentUserId,
+                'display_name': '   ',
+                'email': 'minseo@example.com',
+              },
+          ];
+        SupabaseService.debugItemDatabaseGateway = gateway;
+
+        final items = await SupabaseService.loadItemsForScope(
+          const ItemScope.group(id: 'group-1', label: 'Family'),
+        );
+
+        expect(items.single.registeredByLabel, 'minseo@example.com');
+      },
+    );
+
+    test('maps latest inventory snapshot for personal items', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'personal-1', userId: SupabaseService.currentUserId)
+            ..['product_inventory_snapshots'] = <Map<String, dynamic>>[
+              <String, dynamic>{
+                'remaining_quantity': 3,
+                'confidence': 0.91,
+                'source_detected_name': 'Milk',
+                'observed_at': '2026-05-29T06:12:00.000Z',
+              },
+            ],
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.personal(),
+      );
+
+      expect(items.single.remainingQuantity, 3);
+      expect(items.single.inventoryConfidence, 0.91);
+      expect(items.single.inventorySourceName, 'Milk');
+      expect(
+        items.single.inventoryObservedAt,
+        DateTime.parse('2026-05-29T06:12:00.000Z'),
+      );
+      expect(items.single.remainingQuantityLabel, '현재 3개');
+    });
+
+    test('leaves inventory fields null when no snapshot exists', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'personal-1', userId: SupabaseService.currentUserId),
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.personal(),
+      );
+
+      expect(items.single.remainingQuantity, isNull);
+      expect(items.single.inventoryObservedAt, isNull);
+      expect(items.single.inventoryConfidence, isNull);
+      expect(items.single.inventorySourceName, isNull);
+      expect(items.single.remainingQuantityLabel, isNull);
+    });
+
+    test('maps vision tracking settings from product rows', () async {
+      final gateway = _RecordingItemDatabaseGateway()
+        ..loadItemsResult = <Map<String, dynamic>>[
+          _itemRow(id: 'personal-1', userId: SupabaseService.currentUserId)
+            ..['vision_tracking_enabled'] = true
+            ..['vision_measure_interval_minutes'] = 720
+            ..['vision_last_measured_at'] = '2026-05-29T03:00:00.000Z',
+        ];
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final items = await SupabaseService.loadItemsForScope(
+        const ItemScope.personal(),
+      );
+
+      expect(items.single.visionTrackingEnabled, isTrue);
+      expect(items.single.visionMeasureIntervalMinutes, 720);
+      expect(
+        items.single.visionLastMeasuredAt,
+        DateTime.parse('2026-05-29T03:00:00.000Z'),
+      );
+    });
   });
 
   group('SupabaseService.saveItem scoped ownership', () {
@@ -515,6 +763,143 @@ void main() {
         SupabaseService.currentUserId,
       );
       expect(gateway.upsertedItemPayload?['group_id'], isNull);
+    });
+
+    test('saves vision tracking settings with product items', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      await SupabaseService.saveItem(
+        ConsumableItem(
+          id: 'item-1',
+          name: 'Milk',
+          brand: 'Seoul',
+          category: 'Kitchen',
+          icon: ConsumableItem.iconForCategory('Kitchen'),
+          daysRemaining: 30,
+          cycleDays: 30,
+          progress: 0,
+          visionTrackingEnabled: true,
+          visionMeasureIntervalMinutes: 720,
+        ),
+      );
+
+      expect(gateway.upsertedItemPayload?['vision_tracking_enabled'], isTrue);
+      expect(
+        gateway.upsertedItemPayload?['vision_measure_interval_minutes'],
+        720,
+      );
+    });
+
+    test('inserts purchase quantity from PurchaseRecord', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      await SupabaseService.saveItem(
+        ConsumableItem(
+          id: 'item-quantity',
+          name: '칫솔',
+          brand: 'Brand',
+          category: '욕실/위생',
+          icon: ConsumableItem.iconForCategory('욕실/위생'),
+          daysRemaining: 30,
+          cycleDays: 30,
+          progress: 0,
+          remainingQuantity: 10,
+          purchaseHistory: <PurchaseRecord>[
+            PurchaseRecord(
+              date: DateTime(2026, 5, 30),
+              price: 12000,
+              store: 'Market',
+              quantity: 10,
+            ),
+          ],
+        ),
+      );
+
+      expect(gateway.insertedPurchasePayloads.single['quantity'], 10);
+      expect(gateway.manualQuantityProductItemId, 'item-quantity');
+      expect(gateway.manualQuantityRemainingQuantity, 10);
+    });
+
+    test(
+      'updates existing purchase quantity when purchase id is present',
+      () async {
+        final gateway = _RecordingItemDatabaseGateway();
+        SupabaseService.debugItemDatabaseGateway = gateway;
+
+        await SupabaseService.saveItem(
+          ConsumableItem(
+            id: 'item-existing',
+            name: '필터',
+            brand: 'Brand',
+            category: '가전/필터',
+            icon: ConsumableItem.iconForCategory('가전/필터'),
+            daysRemaining: 30,
+            cycleDays: 30,
+            progress: 0,
+            purchaseHistory: <PurchaseRecord>[
+              PurchaseRecord(
+                id: 'purchase-existing',
+                date: DateTime(2026, 5, 30),
+                price: 45000,
+                store: 'Market',
+                quantity: 3,
+              ),
+            ],
+          ),
+        );
+
+        expect(gateway.insertedPurchasePayloads, isEmpty);
+        expect(gateway.updatedPurchaseIds, <String>['purchase-existing']);
+        expect(gateway.updatedPurchasePayloads.single['quantity'], 3);
+        expect(
+          gateway.updatedPurchasePayloads.single.containsKey('purchased_by'),
+          isFalse,
+        );
+        expect(
+          gateway.updatedPurchasePayloads.single.containsKey('product_item_id'),
+          isFalse,
+        );
+      },
+    );
+  });
+
+  group('SupabaseService manual quantity sync', () {
+    tearDown(() {
+      SupabaseService.debugItemDatabaseGateway = null;
+    });
+
+    test('sets manual quantity through the item gateway', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final snapshot = await SupabaseService.setManualQuantity(
+        productItemId: 'item-1',
+        remainingQuantity: 8,
+        observedAt: DateTime.parse('2026-05-30T12:00:00.000Z'),
+      );
+
+      expect(gateway.manualQuantityProductItemId, 'item-1');
+      expect(gateway.manualQuantityRemainingQuantity, 8);
+      expect(snapshot.remainingQuantity, 8);
+      expect(snapshot.sourceName, 'manual');
+    });
+
+    test('records manual usage through the item gateway', () async {
+      final gateway = _RecordingItemDatabaseGateway();
+      SupabaseService.debugItemDatabaseGateway = gateway;
+
+      final snapshot = await SupabaseService.recordManualUsage(
+        productItemId: 'item-1',
+        usedQuantity: 1,
+        usedAt: DateTime.parse('2026-05-30T12:00:00.000Z'),
+      );
+
+      expect(gateway.manualUsageProductItemId, 'item-1');
+      expect(gateway.manualUsageUsedQuantity, 1);
+      expect(snapshot.remainingQuantity, 4);
+      expect(snapshot.sourceName, 'manual');
     });
   });
 

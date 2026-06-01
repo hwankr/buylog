@@ -13,6 +13,7 @@ class GroupState {
     this.isSaving = false,
     this.isRefreshingMembers = false,
     this.isLeavingGroup = false,
+    this.isUpdatingGroup = false,
     this.errorMessage,
   });
 
@@ -25,6 +26,7 @@ class GroupState {
   final bool isSaving;
   final bool isRefreshingMembers;
   final bool isLeavingGroup;
+  final bool isUpdatingGroup;
   final String? errorMessage;
 
   List<BuylogGroup> get visibleGroups {
@@ -40,6 +42,32 @@ class GroupState {
       for (final group in visibleGroups)
         ItemScope.group(id: group.id, label: group.name),
     ];
+  }
+
+  List<ItemScope> get groupScopes {
+    return <ItemScope>[
+      for (final group in visibleGroups)
+        ItemScope.group(id: group.id, label: group.name),
+    ];
+  }
+
+  List<ItemScope> get availableGroupScopes => groupScopes;
+
+  ItemScope? get selectedGroupScope {
+    final scopes = groupScopes;
+    if (selectedScope.isGroup) {
+      for (final scope in scopes) {
+        if (scope.id == selectedScope.id) {
+          return scope;
+        }
+      }
+    }
+    return scopes.isEmpty ? null : scopes.first;
+  }
+
+  BuylogGroup? get selectedGroup {
+    final scope = selectedGroupScope;
+    return scope == null ? null : groupForScope(scope);
   }
 
   BuylogGroup? groupForScope(ItemScope scope) {
@@ -58,6 +86,7 @@ class GroupState {
     bool? isSaving,
     bool? isRefreshingMembers,
     bool? isLeavingGroup,
+    bool? isUpdatingGroup,
     Object? errorMessage = _unset,
   }) {
     final nextGroups = groups ?? this.groups;
@@ -73,6 +102,7 @@ class GroupState {
       isSaving: isSaving ?? this.isSaving,
       isRefreshingMembers: isRefreshingMembers ?? this.isRefreshingMembers,
       isLeavingGroup: isLeavingGroup ?? this.isLeavingGroup,
+      isUpdatingGroup: isUpdatingGroup ?? this.isUpdatingGroup,
       errorMessage: identical(errorMessage, _unset)
           ? this.errorMessage
           : errorMessage as String?,
@@ -97,6 +127,7 @@ class GroupStore extends ValueNotifier<GroupState> {
       value = GroupState(
         group: groups.isEmpty ? null : groups.first,
         groups: groups,
+        selectedScope: _firstGroupScopeOrPersonal(groups),
       );
     } catch (_) {
       _initialized = false;
@@ -137,12 +168,91 @@ class GroupStore extends ValueNotifier<GroupState> {
     }
   }
 
+  Future<void> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    final trimmedGroupId = groupId.trim();
+    if (trimmedGroupId.isEmpty) {
+      throw ArgumentError.value(groupId, 'groupId', 'Group id is required.');
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Group name is required.');
+    }
+
+    final previousState = value;
+    final currentGroup = previousState.groupForScope(
+      ItemScope.group(id: trimmedGroupId, label: ''),
+    );
+    if (currentGroup?.name == trimmedName || value.isUpdatingGroup) {
+      return;
+    }
+
+    value = previousState.copyWith(isUpdatingGroup: true, errorMessage: null);
+
+    try {
+      final updatedGroup = await SupabaseService.renameGroup(
+        groupId: trimmedGroupId,
+        name: trimmedName,
+      );
+      final updatedGroups = previousState.visibleGroups
+          .map((group) => group.id == updatedGroup.id ? updatedGroup : group)
+          .toList(growable: false);
+      final selectedScope =
+          previousState.selectedScope.isGroup &&
+              previousState.selectedScope.id == updatedGroup.id
+          ? ItemScope.group(id: updatedGroup.id, label: updatedGroup.name)
+          : previousState.selectedScope;
+
+      value = GroupState(
+        group: updatedGroups.isEmpty ? null : updatedGroups.first,
+        groups: updatedGroups,
+        selectedScope: selectedScope,
+      );
+    } catch (_) {
+      value = previousState.copyWith(
+        isUpdatingGroup: false,
+        errorMessage: '그룹 이름을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+      rethrow;
+    }
+  }
+
   void selectScope(ItemScope scope) {
     final allowed = value.availableScopes.any(
       (candidate) => candidate == scope,
     );
     if (!allowed) return;
     value = value.copyWith(selectedScope: scope, errorMessage: null);
+  }
+
+  ItemScope _firstGroupScopeOrPersonal(List<BuylogGroup> groups) {
+    if (groups.isEmpty) {
+      return const ItemScope.personal();
+    }
+    final first = groups.first;
+    return ItemScope.group(id: first.id, label: first.name);
+  }
+
+  ItemScope _scopeAfterLeavingGroup({
+    required ItemScope previousScope,
+    required String removedGroupId,
+    required List<ItemScope> remainingGroupScopes,
+  }) {
+    if (previousScope.isGroup && previousScope.id != removedGroupId) {
+      for (final scope in remainingGroupScopes) {
+        if (scope.id == previousScope.id) {
+          return scope;
+        }
+      }
+    }
+
+    if (remainingGroupScopes.isEmpty) {
+      return const ItemScope.personal();
+    }
+    return remainingGroupScopes.first;
   }
 
   Future<void> refreshMembers({String? groupId}) async {
@@ -200,23 +310,20 @@ class GroupStore extends ValueNotifier<GroupState> {
         newOwnerUserId: newOwnerUserId,
       );
       final groups = await SupabaseService.loadGroupsForUser();
-      final selectedScope =
-          previousState.selectedScope.isGroup &&
-              previousState.selectedScope.id == trimmedGroupId
-          ? const ItemScope.personal()
-          : previousState.selectedScope;
-      final availableScopes = <ItemScope>[
-        const ItemScope.personal(),
+      final remainingGroupScopes = <ItemScope>[
         for (final group in groups)
           ItemScope.group(id: group.id, label: group.name),
       ];
+      final selectedScope = _scopeAfterLeavingGroup(
+        previousScope: previousState.selectedScope,
+        removedGroupId: trimmedGroupId,
+        remainingGroupScopes: remainingGroupScopes,
+      );
 
       value = GroupState(
         group: groups.isEmpty ? null : groups.first,
         groups: groups,
-        selectedScope: availableScopes.contains(selectedScope)
-            ? selectedScope
-            : const ItemScope.personal(),
+        selectedScope: selectedScope,
       );
     } catch (_) {
       value = previousState.copyWith(

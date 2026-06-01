@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart';
 import '../models/item.dart';
 import '../models/item_scope.dart';
 import 'supabase_service.dart';
+import 'daily_usage_service.dart';
+import 'ai/personal_regression_service.dart';
+import 'ai/regression_coefficients.dart';
 
 class ItemSaveEvent {
   const ItemSaveEvent({required this.scope, required this.serial});
@@ -44,6 +47,7 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
     if (scope.isGroup) {
       await SupabaseService.saveItem(item, scope: scope);
       _notifySaved(scope);
+      _triggerPersonalModelUpdate(item);
       return;
     }
 
@@ -52,6 +56,7 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
     try {
       await SupabaseService.saveItem(item, scope: scope);
       _notifySaved(scope);
+      _triggerPersonalModelUpdate(item);
     } catch (e) {
       value = List.of(previous);
       rethrow;
@@ -66,6 +71,7 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
     if (scope.isGroup) {
       await SupabaseService.saveItem(updated, scope: scope);
       _notifySaved(scope);
+      _triggerPersonalModelUpdate(updated);
       return;
     }
 
@@ -76,6 +82,7 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
     try {
       await SupabaseService.saveItem(updated, scope: scope);
       _notifySaved(scope);
+      _triggerPersonalModelUpdate(updated);
     } catch (e) {
       value = List.of(previous);
       rethrow;
@@ -90,6 +97,119 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
       await SupabaseService.deleteItem(id);
     } catch (e) {
       value = List.of(previous);
+      rethrow;
+    }
+  }
+
+  Future<ConsumableItem> recordManualUsage(
+    ConsumableItem item, {
+    int usedQuantity = 1,
+    DateTime? usedAt,
+  }) async {
+    if (usedQuantity < 1) {
+      throw ArgumentError.value(
+        usedQuantity,
+        'usedQuantity',
+        'Used quantity must be greater than zero.',
+      );
+    }
+
+    final current = findById(item.id) ?? item;
+    final remaining = current.remainingQuantity;
+    if (remaining != null && remaining < usedQuantity) {
+      throw StateError('남은 수량보다 많이 사용할 수 없습니다.');
+    }
+
+    final observedAt = usedAt ?? DateTime.now();
+    final previous = List<ConsumableItem>.unmodifiable(value);
+    final hasLocalItem = value.any((candidate) => candidate.id == current.id);
+
+    if (hasLocalItem && remaining != null) {
+      _replaceLocal(
+        current.copyWith(
+          remainingQuantity: remaining - usedQuantity,
+          inventoryObservedAt: observedAt,
+          inventoryConfidence: 1,
+          inventorySourceName: 'manual',
+        ),
+      );
+    }
+
+    try {
+      final snapshot = await SupabaseService.recordManualUsage(
+        productItemId: current.id,
+        usedQuantity: usedQuantity,
+        usedAt: observedAt,
+      );
+      final updated = current.copyWith(
+        remainingQuantity: snapshot.remainingQuantity,
+        inventoryObservedAt: snapshot.observedAt,
+        inventoryConfidence: snapshot.confidence,
+        inventorySourceName: snapshot.sourceName,
+      );
+      if (hasLocalItem) {
+        _replaceLocal(updated);
+      }
+      _notifySaved(_scopeFor(updated));
+      return updated;
+    } catch (_) {
+      if (hasLocalItem) {
+        value = List.of(previous);
+      }
+      rethrow;
+    }
+  }
+
+  Future<ConsumableItem> setManualQuantity(
+    ConsumableItem item, {
+    required int remainingQuantity,
+    DateTime? observedAt,
+  }) async {
+    if (remainingQuantity < 0) {
+      throw ArgumentError.value(
+        remainingQuantity,
+        'remainingQuantity',
+        'Remaining quantity must be zero or greater.',
+      );
+    }
+
+    final current = findById(item.id) ?? item;
+    final effectiveObservedAt = observedAt ?? DateTime.now();
+    final previous = List<ConsumableItem>.unmodifiable(value);
+    final hasLocalItem = value.any((candidate) => candidate.id == current.id);
+
+    if (hasLocalItem) {
+      _replaceLocal(
+        current.copyWith(
+          remainingQuantity: remainingQuantity,
+          inventoryObservedAt: effectiveObservedAt,
+          inventoryConfidence: 1,
+          inventorySourceName: 'manual',
+        ),
+      );
+    }
+
+    try {
+      final snapshot = await SupabaseService.setManualQuantity(
+        productItemId: current.id,
+        remainingQuantity: remainingQuantity,
+        observedAt: effectiveObservedAt,
+      );
+      final updated = current.copyWith(
+        remainingQuantity: snapshot.remainingQuantity,
+        inventoryObservedAt: snapshot.observedAt,
+        inventoryConfidence: snapshot.confidence,
+        inventorySourceName: snapshot.sourceName,
+      );
+      if (hasLocalItem) {
+        _replaceLocal(updated);
+      }
+      _notifySaved(_scopeFor(updated));
+      return updated;
+    } catch (_) {
+      if (hasLocalItem) {
+        value = List.of(previous);
+      }
       rethrow;
     }
   }
@@ -123,5 +243,41 @@ class ItemStore extends ValueNotifier<List<ConsumableItem>> {
       scope: scope,
       serial: _saveEventSerial,
     );
+  }
+
+  void _replaceLocal(ConsumableItem updated) {
+    value = value
+        .map((item) => item.id == updated.id ? updated : item)
+        .toList(growable: false);
+  }
+
+  ItemScope _scopeFor(ConsumableItem item) {
+    final groupId = item.groupId;
+    if (groupId != null && groupId.isNotEmpty) {
+      return ItemScope.group(id: groupId, label: '그룹');
+    }
+    return const ItemScope.personal();
+  }
+
+  /// 구매 이력 15회 이상이면 개인화 β 계수를 비동기로 업데이트한다.
+  void _triggerPersonalModelUpdate(ConsumableItem item) {
+    if (item.purchaseHistory.length < kPhase4Threshold) return;
+    final group =
+        ConsumableCycleCoefficients.categoryToGroup[item.category] ?? 'average';
+    final dailyUsage =
+        DailyUsageService.instance.getInternalValue(item.category) ??
+        (ConsumableCycleCoefficients.baseUsageRef[group] ?? 1.0);
+    final purchaseDates = item.purchaseHistory.map((p) => p.date).toList();
+    PersonalRegressionService.instance
+        .updateIfNeeded(
+          group: group,
+          purchaseDates: purchaseDates,
+          dailyUsage: dailyUsage,
+        )
+        .then((updated) {
+          if (updated) {
+            debugPrint('[ItemStore] Phase4 β 업데이트 완료: ${item.category}');
+          }
+        }, onError: (e) => debugPrint('[ItemStore] Phase4 β 업데이트 실패: $e'));
   }
 }

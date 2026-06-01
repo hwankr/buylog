@@ -73,8 +73,10 @@ class ItemCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '${item.cycleDays}일 주기',
+              item.remainingQuantityLabel ?? '${item.cycleDays}일 주기',
               style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

@@ -15,6 +15,8 @@ import 'screens/add_item_screen.dart';
 import 'services/group_store.dart';
 import 'services/supabase_service.dart';
 import 'services/item_store.dart';
+import 'services/daily_usage_service.dart';
+import 'services/ai/personal_regression_service.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -43,6 +45,8 @@ Future<void> main() async {
 
 Future<void> bootstrapApp() async {
   await SupabaseService.initialize();
+  await DailyUsageService.instance.initialize();
+  await PersonalRegressionService.instance.initialize();
   await ItemStore.instance.initialize();
   await preloadGroupForStartup();
   unawaited(loadEnvironmentForStartup());
@@ -121,18 +125,21 @@ class MainNavigationState extends State<MainNavigation> {
     setState(() => _currentIndex = index);
   }
 
-  ItemScope _currentAddScope() {
+  ItemScope _currentAddScope(GroupState groupState) {
     if (_currentIndex != 1) {
       return const ItemScope.personal();
     }
 
-    final state = GroupStore.instance.value;
-    final scope = state.selectedScope;
-    if (scope.isGroup) {
-      return scope;
-    }
+    return groupState.selectedGroupScope ?? const ItemScope.personal();
+  }
 
-    return const ItemScope.personal();
+  bool _shouldShowFab(GroupState groupState) {
+    return switch (_currentIndex) {
+      0 => true,
+      1 => groupState.selectedGroupScope != null,
+      2 => true,
+      _ => false,
+    };
   }
 
   Widget _screenAt(int index) => switch (index) {
@@ -144,7 +151,7 @@ class MainNavigationState extends State<MainNavigation> {
     _ => throw StateError('No screen registered for tab $index'),
   };
 
-  Future<void> _openAddSheet() async {
+  Future<void> _openAddSheet(GroupState groupState) async {
     final choice = await showModalBottomSheet<_AddChoice>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -152,7 +159,7 @@ class MainNavigationState extends State<MainNavigation> {
       builder: (_) => const _AddActionSheet(),
     );
     if (!mounted || choice == null) return;
-    final targetScope = _currentAddScope();
+    final targetScope = _currentAddScope(groupState);
     switch (choice) {
       case _AddChoice.scan:
         // ScanScreen 코드는 변경하지 않음. 자체 헤더가 있으니 AppBar 없이
@@ -194,45 +201,51 @@ class MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    final showFab =
-        _currentIndex == 0 || _currentIndex == 1 || _currentIndex == 2;
+    return ValueListenableBuilder<GroupState>(
+      valueListenable: GroupStore.instance,
+      builder: (context, groupState, _) {
+        final showFab = _shouldShowFab(groupState);
 
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [for (var i = 0; i < _tabs.length; i++) _screenAt(i)],
-      ),
-      floatingActionButton: showFab
-          ? FloatingActionButton(
-              onPressed: _openAddSheet,
-              backgroundColor: AppColors.success,
-              foregroundColor: Colors.white,
-              elevation: 6,
-              tooltip: '제품 추가',
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+        return Scaffold(
+          body: IndexedStack(
+            index: _currentIndex,
+            children: [for (var i = 0; i < _tabs.length; i++) _screenAt(i)],
+          ),
+          floatingActionButton: showFab
+              ? FloatingActionButton(
+                  onPressed: () => _openAddSheet(groupState),
+                  backgroundColor: AppColors.success,
+                  foregroundColor: Colors.white,
+                  elevation: 6,
+                  tooltip: '제품 추가',
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(Icons.add, size: 26),
+                )
+              : null,
+          bottomNavigationBar: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(
+                top: BorderSide(color: AppColors.border, width: 0.5),
               ),
-              child: const Icon(Icons.add, size: 26),
-            )
-          : null,
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: switchTab,
-          items: [
-            for (final t in _tabs)
-              BottomNavigationBarItem(
-                icon: Icon(t.icon),
-                activeIcon: Icon(t.activeIcon),
-                label: t.label,
-              ),
-          ],
-        ),
-      ),
+            ),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: switchTab,
+              items: [
+                for (final t in _tabs)
+                  BottomNavigationBarItem(
+                    icon: Icon(t.icon),
+                    activeIcon: Icon(t.activeIcon),
+                    label: t.label,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

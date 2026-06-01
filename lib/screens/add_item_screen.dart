@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/item.dart';
 import '../models/item_scope.dart';
 import '../services/ai/category_defaults.dart';
+import '../services/group_store.dart';
 import '../services/supabase_service.dart';
 import '../services/item_store.dart';
 import '../theme/app_theme.dart';
@@ -49,6 +50,8 @@ class AddItemScreen extends StatefulWidget {
 }
 
 class _AddItemScreenState extends State<AddItemScreen> {
+  static const List<int> _visionIntervalOptions = [60, 180, 360, 720, 1440];
+
   final _formKey = GlobalKey<FormState>();
 
   // 기본 정보 컨트롤러
@@ -56,6 +59,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
   late final TextEditingController _brandCtrl;
   late final TextEditingController _cycleDaysCtrl;
   String _selectedCategory = categoryDefaultDays.keys.first;
+  late ItemScope _selectedScope;
 
   // 구매 이력 목록
   final List<_PurchaseEntry> _purchases = [];
@@ -63,13 +67,17 @@ class _AddItemScreenState extends State<AddItemScreen> {
   // 이미지 상태
   Uint8List? _imageBytes; // 새로 선택한 이미지 bytes
   bool _isSaving = false;
+  bool _visionTrackingEnabled = false;
+  int _visionMeasureIntervalMinutes = 360;
 
   bool get _hasImageSelected =>
       _imageBytes != null || (_isEditing && widget.editItem!.imageUrl != null);
 
   bool get _isEditing => widget.editItem != null;
 
-  ItemScope get _effectiveScope {
+  bool get _canChangeScope => !_isEditing;
+
+  ItemScope get _initialScope {
     final explicit = widget.targetScope;
     if (explicit != null) return explicit;
 
@@ -81,9 +89,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
     return const ItemScope.personal();
   }
 
+  ItemScope get _effectiveScope {
+    if (_isEditing) return _initialScope;
+    return _selectedScope;
+  }
+
   @override
   void initState() {
     super.initState();
+    _selectedScope = _initialScope;
     final edit = widget.editItem;
     final p = widget.prefillData;
 
@@ -91,6 +105,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
       // 편집 모드: 기존 제품 데이터로 초기화
       _nameCtrl = TextEditingController(text: edit.name);
       _brandCtrl = TextEditingController(text: edit.brand);
+      _visionTrackingEnabled = edit.visionTrackingEnabled;
+      _visionMeasureIntervalMinutes = edit.visionMeasureIntervalMinutes;
       // 기존 카테고리가 드롭다운 목록에 없으면 첫 번째 항목으로 폴백
       _selectedCategory = categoryDefaultDays.containsKey(edit.category)
           ? edit.category
@@ -103,6 +119,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
             date: r.date,
             priceCtrl: TextEditingController(text: r.price.toString()),
             storeCtrl: TextEditingController(text: r.store),
+            quantityCtrl: TextEditingController(text: r.quantity.toString()),
           ),
         );
       }
@@ -119,6 +136,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           date: p?.purchaseDate ?? DateTime.now(),
           priceCtrl: TextEditingController(text: p?.price?.toString() ?? ''),
           storeCtrl: TextEditingController(text: p?.storeName ?? ''),
+          quantityCtrl: TextEditingController(text: '1'),
         ),
       );
     }
@@ -132,6 +150,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     for (final e in _purchases) {
       e.priceCtrl.dispose();
       e.storeCtrl.dispose();
+      e.quantityCtrl.dispose();
     }
     super.dispose();
   }
@@ -185,6 +204,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           date: DateTime.now(),
           priceCtrl: TextEditingController(),
           storeCtrl: TextEditingController(),
+          quantityCtrl: TextEditingController(text: '1'),
         ),
       );
     });
@@ -195,6 +215,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       final entry = _purchases.removeAt(index);
       entry.priceCtrl.dispose();
       entry.storeCtrl.dispose();
+      entry.quantityCtrl.dispose();
     });
   }
 
@@ -212,6 +233,22 @@ class _AddItemScreenState extends State<AddItemScreen> {
     if (xFile == null) return;
     final bytes = await xFile.readAsBytes();
     setState(() => _imageBytes = bytes);
+  }
+
+  List<ItemScope> _scopeOptions(GroupState state) {
+    final options = <ItemScope>[
+      const ItemScope.personal(),
+      ...state.availableGroupScopes,
+    ];
+
+    final selectedAlreadyIncluded = options.any(
+      (scope) => scope.storageKey == _selectedScope.storageKey,
+    );
+    if (!selectedAlreadyIncluded && _selectedScope.isGroup) {
+      options.add(_selectedScope);
+    }
+
+    return options;
   }
 
   // ---------------------------------------------------------------------------
@@ -249,9 +286,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   ) ??
                   0,
               store: e.storeCtrl.text.trim(),
+              quantity: e.quantity,
             ),
           )
           .toList();
+
+      final newPurchaseQuantity = _purchases.fold<int>(
+        0,
+        (total, entry) => total + entry.quantity,
+      );
 
       final cycleDays =
           int.tryParse(_cycleDaysCtrl.text) ??
@@ -311,22 +354,24 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     date: p.date,
                     price: p.price,
                     store: p.store,
+                    quantity: p.quantity,
                   ),
                 )
                 .toList();
-            final merged = ConsumableItem(
-              id: duplicate.id,
-              name: duplicate.name,
-              brand: duplicate.brand,
-              category: duplicate.category,
-              icon: duplicate.icon,
-              daysRemaining: duplicate.daysRemaining,
-              cycleDays: duplicate.cycleDays,
-              progress: duplicate.progress,
-              aiPredictedDays: duplicate.aiPredictedDays,
-              aiConfidence: duplicate.aiConfidence,
+            final existingRemaining = duplicate.remainingQuantity;
+            final mergedRemainingQuantity = existingRemaining == null
+                ? duplicate.totalPurchasedQuantity + newPurchaseQuantity
+                : existingRemaining + newPurchaseQuantity;
+            final mergedPurchaseHistory = List<PurchaseRecord>.of(
+              duplicate.purchaseHistory,
+            )..addAll(newPurchases);
+            final merged = duplicate.copyWith(
               imageUrl: imageUrl ?? duplicate.imageUrl,
-              purchaseHistory: [...duplicate.purchaseHistory, ...newPurchases],
+              remainingQuantity: mergedRemainingQuantity,
+              inventoryObservedAt: DateTime.now(),
+              inventoryConfidence: 1,
+              inventorySourceName: 'manual',
+              purchaseHistory: mergedPurchaseHistory,
             );
             await ItemStore.instance.update(merged, scope: _effectiveScope);
             if (mounted) {
@@ -356,6 +401,23 @@ class _AddItemScreenState extends State<AddItemScreen> {
         aiPredictedDays: _isEditing ? widget.editItem!.aiPredictedDays : null,
         aiConfidence: _isEditing ? widget.editItem!.aiConfidence : null,
         imageUrl: imageUrl,
+        visionTrackingEnabled: _visionTrackingEnabled,
+        visionMeasureIntervalMinutes: _visionMeasureIntervalMinutes,
+        visionLastMeasuredAt: _isEditing
+            ? widget.editItem!.visionLastMeasuredAt
+            : null,
+        remainingQuantity: _isEditing
+            ? widget.editItem!.remainingQuantity
+            : newPurchaseQuantity,
+        inventoryObservedAt: _isEditing
+            ? widget.editItem!.inventoryObservedAt
+            : DateTime.now(),
+        inventoryConfidence: _isEditing
+            ? widget.editItem!.inventoryConfidence
+            : 1,
+        inventorySourceName: _isEditing
+            ? widget.editItem!.inventorySourceName
+            : 'manual',
         purchaseHistory: purchases,
       );
 
@@ -419,6 +481,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_effectiveScope.isGroup) ...[
+                _buildScopeBanner(),
+                const SizedBox(height: 20),
+              ],
               if (widget.isOcrReview) ...[
                 _buildOcrBanner(),
                 const SizedBox(height: 20),
@@ -427,9 +493,14 @@ class _AddItemScreenState extends State<AddItemScreen> {
               const SizedBox(height: 12),
               _buildImagePicker(),
               const SizedBox(height: 24),
+              _buildScopeToggle(),
               _sectionTitle('기본 정보'),
               const SizedBox(height: 12),
               _buildBasicInfoSection(),
+              const SizedBox(height: 24),
+              _sectionTitle('Vision 추적'),
+              const SizedBox(height: 12),
+              _buildVisionTrackingSection(),
               const SizedBox(height: 24),
               _sectionTitle('구매 이력'),
               const SizedBox(height: 4),
@@ -462,6 +533,39 @@ class _AddItemScreenState extends State<AddItemScreen> {
         fontSize: 16,
         fontWeight: FontWeight.w700,
         color: AppColors.text,
+      ),
+    );
+  }
+
+  Widget _buildScopeBanner() {
+    final scope = _effectiveScope;
+    if (!scope.isGroup) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.primaryLight2,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primaryLight, width: 0.5),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.group_outlined, size: 18, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${scope.label}에 추가 중',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.primaryDark,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -593,6 +697,72 @@ class _AddItemScreenState extends State<AddItemScreen> {
     );
   }
 
+  Widget _buildScopeToggle() {
+    if (!_canChangeScope) return const SizedBox.shrink();
+
+    return ValueListenableBuilder<GroupState>(
+      valueListenable: GroupStore.instance,
+      builder: (context, state, _) {
+        final options = _scopeOptions(state);
+        if (options.length <= 1) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          key: const ValueKey('add_item_scope_toggle'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '등록 위치',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final scope in options)
+                  ChoiceChip(
+                    key: ValueKey('add_item_scope_${scope.storageKey}'),
+                    label: Text(scope.label),
+                    selected: scope.storageKey == _selectedScope.storageKey,
+                    onSelected: (_) {
+                      setState(() {
+                        _selectedScope = scope;
+                      });
+                    },
+                    selectedColor: AppColors.primary,
+                    backgroundColor: AppColors.surface,
+                    labelStyle: TextStyle(
+                      color: scope.storageKey == _selectedScope.storageKey
+                          ? Colors.white
+                          : AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      side: BorderSide(
+                        color: scope.storageKey == _selectedScope.storageKey
+                            ? AppColors.primary
+                            : AppColors.border,
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // 기본 정보 섹션
   // ---------------------------------------------------------------------------
@@ -619,6 +789,92 @@ class _AddItemScreenState extends State<AddItemScreen> {
         _buildCycleDaysField(),
       ],
     );
+  }
+
+  Widget _buildVisionTrackingSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.visibility_outlined,
+                size: 20,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Vision 추적',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Switch(
+                key: const ValueKey('vision_tracking_switch'),
+                value: _visionTrackingEnabled,
+                activeThumbColor: AppColors.primary,
+                onChanged: (value) {
+                  setState(() => _visionTrackingEnabled = value);
+                },
+              ),
+            ],
+          ),
+          if (_visionTrackingEnabled) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final minutes in _visionIntervalOptions)
+                  ChoiceChip(
+                    key: ValueKey('vision_interval_$minutes'),
+                    label: Text(_visionIntervalLabel(minutes)),
+                    selected: _visionMeasureIntervalMinutes == minutes,
+                    onSelected: (_) {
+                      setState(() => _visionMeasureIntervalMinutes = minutes);
+                    },
+                    selectedColor: AppColors.primary,
+                    labelStyle: TextStyle(
+                      color: _visionMeasureIntervalMinutes == minutes
+                          ? Colors.white
+                          : AppColors.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                      side: BorderSide(
+                        color: _visionMeasureIntervalMinutes == minutes
+                            ? AppColors.primary
+                            : AppColors.border,
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _visionIntervalLabel(int minutes) {
+    if (minutes % 60 == 0) {
+      return '${minutes ~/ 60}시간';
+    }
+    return '$minutes분';
   }
 
   Widget _labeledField({
@@ -880,7 +1136,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           ),
           const SizedBox(height: 12),
 
-          // 가격 + 매장명
+          // 가격 + 수량 + 매장명
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -896,14 +1152,30 @@ class _AddItemScreenState extends State<AddItemScreen> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                flex: 4,
+                flex: 2,
                 child: _compactField(
-                  label: '매장명',
-                  controller: entry.storeCtrl,
-                  hint: '예) 쿠팡',
+                  key: ValueKey('purchase_quantity_$index'),
+                  label: '수량',
+                  controller: entry.quantityCtrl,
+                  hint: '1',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (value) {
+                    final parsed = int.tryParse(value?.trim() ?? '');
+                    if (parsed == null || parsed < 1) {
+                      return '1개 이상';
+                    }
+                    return null;
+                  },
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          _compactField(
+            label: '매장명',
+            controller: entry.storeCtrl,
+            hint: '예) 쿠팡',
           ),
         ],
       ),
@@ -911,11 +1183,13 @@ class _AddItemScreenState extends State<AddItemScreen> {
   }
 
   Widget _compactField({
+    Key? key,
     required String label,
     required TextEditingController controller,
     String? hint,
     TextInputType keyboardType = TextInputType.text,
     List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -930,9 +1204,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
         ),
         const SizedBox(height: 5),
         TextFormField(
+          key: key,
           controller: controller,
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
+          validator: validator,
           style: const TextStyle(fontSize: 14, color: AppColors.text),
           decoration: _inputDecoration(
             hint: hint,
@@ -1067,13 +1343,21 @@ class _PurchaseEntry {
   final DateTime date;
   final TextEditingController priceCtrl;
   final TextEditingController storeCtrl;
+  final TextEditingController quantityCtrl;
 
   _PurchaseEntry({
     this.id,
     required this.date,
     required this.priceCtrl,
     required this.storeCtrl,
+    required this.quantityCtrl,
   });
+
+  int get quantity {
+    final parsed = int.tryParse(quantityCtrl.text.trim());
+    if (parsed == null || parsed < 1) return 1;
+    return parsed;
+  }
 
   _PurchaseEntry copyWith({DateTime? date}) {
     return _PurchaseEntry(
@@ -1081,6 +1365,7 @@ class _PurchaseEntry {
       date: date ?? this.date,
       priceCtrl: priceCtrl,
       storeCtrl: storeCtrl,
+      quantityCtrl: quantityCtrl,
     );
   }
 }

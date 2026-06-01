@@ -231,6 +231,32 @@ void main() {
       expect(gateway.loadDefaultGroupCalls, 0);
     });
 
+    test(
+      'createGroup appends a new group and selects it when groups already exist',
+      () async {
+        GroupStore.instance.value = GroupState(
+          groups: <BuylogGroup>[_groupWithMembers()],
+          selectedScope: const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+        gateway.nextCreatedGroupId = 'group-2';
+
+        await GroupStore.instance.createGroup('사무실');
+
+        expect(GroupStore.instance.value.groups.map((group) => group.name), [
+          '우리 가족',
+          '사무실',
+        ]);
+        expect(
+          GroupStore.instance.value.selectedScope,
+          const ItemScope.group(id: 'group-2', label: '사무실'),
+        );
+        expect(
+          GroupStore.instance.value.selectedGroupScope,
+          const ItemScope.group(id: 'group-2', label: '사무실'),
+        );
+      },
+    );
+
     test('builds personal and joined group scopes after initialize', () async {
       gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
         _groupRow(id: 'group-1', name: '우리 가족'),
@@ -243,9 +269,68 @@ void main() {
       expect(scopes.map((scope) => scope.label), ['내 물품', '우리 가족', '사무실']);
       expect(
         GroupStore.instance.value.selectedScope,
-        const ItemScope.personal(),
+        const ItemScope.group(id: 'group-1', label: '우리 가족'),
       );
     });
+
+    test('exposes joined groups as group-only scopes', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+
+      await GroupStore.instance.initialize();
+
+      final groupScopes = GroupStore.instance.value.groupScopes;
+      expect(groupScopes.map((scope) => scope.label), ['우리 가족', '사무실']);
+      expect(groupScopes.every((scope) => scope.isGroup), isTrue);
+      expect(groupScopes.any((scope) => scope.label == '내 물품'), isFalse);
+    });
+
+    test(
+      'initialize selects the first joined group for the group page',
+      () async {
+        gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+          _groupRow(id: 'group-1', name: '우리 가족'),
+          _groupRow(id: 'group-2', name: '사무실'),
+        ];
+
+        await GroupStore.instance.initialize();
+
+        expect(
+          GroupStore.instance.value.selectedScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+        expect(
+          GroupStore.instance.value.selectedGroupScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+      },
+    );
+
+    test(
+      'selectedGroupScope falls back to the first group when selected scope is personal',
+      () {
+        GroupStore.instance.value = GroupState(
+          groups: <BuylogGroup>[
+            _groupWithMembers(),
+            BuylogGroup(
+              id: 'group-2',
+              name: '사무실',
+              inviteCode: 'BUY-OFFICE',
+              createdBy: 'owner-user',
+              createdAt: DateTime.parse('2026-05-27T00:00:00.000Z'),
+            ),
+          ],
+          selectedScope: const ItemScope.personal(),
+        );
+
+        expect(
+          GroupStore.instance.value.selectedGroupScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+      },
+    );
 
     test('selectScope switches to a joined group scope', () async {
       gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
@@ -258,6 +343,127 @@ void main() {
       );
 
       expect(GroupStore.instance.value.selectedScope.label, '우리 가족');
+    });
+
+    test('exposes group-only scopes without the personal scope', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+
+      await GroupStore.instance.initialize();
+
+      final scopes = GroupStore.instance.value.availableGroupScopes;
+      expect(scopes.map((scope) => scope.label), ['우리 가족', '사무실']);
+      expect(scopes.every((scope) => scope.isGroup), isTrue);
+    });
+
+    test(
+      'uses the first joined group as selectedGroupScope fallback',
+      () async {
+        gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+          _groupRow(id: 'group-1', name: '우리 가족'),
+          _groupRow(id: 'group-2', name: '사무실'),
+        ];
+
+        await GroupStore.instance.initialize();
+
+        expect(
+          GroupStore.instance.value.selectedScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+        expect(
+          GroupStore.instance.value.selectedGroupScope,
+          const ItemScope.group(id: 'group-1', label: '우리 가족'),
+        );
+        expect(GroupStore.instance.value.selectedGroup?.id, 'group-1');
+      },
+    );
+
+    test('keeps the selected joined group as selectedGroupScope', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+      await GroupStore.instance.initialize();
+
+      GroupStore.instance.selectScope(
+        const ItemScope.group(id: 'group-2', label: '사무실'),
+      );
+
+      expect(
+        GroupStore.instance.value.selectedGroupScope,
+        const ItemScope.group(id: 'group-2', label: '사무실'),
+      );
+      expect(GroupStore.instance.value.selectedGroup?.id, 'group-2');
+    });
+
+    test('renames selected group and updates selected scope label', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+      await GroupStore.instance.initialize();
+      GroupStore.instance.selectScope(
+        const ItemScope.group(id: 'group-1', label: '우리 가족'),
+      );
+
+      await GroupStore.instance.renameGroup(
+        groupId: ' group-1 ',
+        name: '  새 가족  ',
+      );
+
+      expect(gateway.renameGroupCalls, 1);
+      expect(gateway.renameGroupGroupId, 'group-1');
+      expect(gateway.renameGroupName, '새 가족');
+      expect(GroupStore.instance.value.groups.first.name, '새 가족');
+      expect(
+        GroupStore.instance.value.selectedScope,
+        const ItemScope.group(id: 'group-1', label: '새 가족'),
+      );
+      expect(GroupStore.instance.value.isUpdatingGroup, isFalse);
+      expect(GroupStore.instance.value.errorMessage, isNull);
+    });
+
+    test('keeps previous group state when rename fails', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+      ];
+      await GroupStore.instance.initialize();
+      gateway.renameGroupError = StateError('rename failed');
+
+      await expectLater(
+        GroupStore.instance.renameGroup(groupId: 'group-1', name: '새 가족'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'rename failed',
+          ),
+        ),
+      );
+
+      expect(GroupStore.instance.value.groups.single.name, '우리 가족');
+      expect(GroupStore.instance.value.isUpdatingGroup, isFalse);
+      expect(
+        GroupStore.instance.value.errorMessage,
+        '그룹 이름을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+    });
+
+    test('rejects blank rename values before gateway call', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+      ];
+      await GroupStore.instance.initialize();
+
+      await expectLater(
+        GroupStore.instance.renameGroup(groupId: 'group-1', name: '   '),
+        throwsA(isA<ArgumentError>()),
+      );
+
+      expect(gateway.renameGroupCalls, 0);
+      expect(GroupStore.instance.value.groups.single.name, '우리 가족');
     });
 
     test(
@@ -376,10 +582,35 @@ void main() {
       ]);
       expect(
         GroupStore.instance.value.selectedScope,
-        const ItemScope.personal(),
+        const ItemScope.group(id: 'group-2', label: '사무실'),
       );
       expect(GroupStore.instance.value.isLeavingGroup, isFalse);
       expect(GroupStore.instance.value.errorMessage, isNull);
+    });
+
+    test('leaves selected group and selects next remaining group', () async {
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-1', name: '우리 가족'),
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+      await GroupStore.instance.initialize();
+      GroupStore.instance.selectScope(
+        const ItemScope.group(id: 'group-1', label: '우리 가족'),
+      );
+      gateway.loadGroupsForUserResult = <Map<String, dynamic>>[
+        _groupRow(id: 'group-2', name: '사무실'),
+      ];
+
+      await GroupStore.instance.leaveGroup(groupId: 'group-1');
+
+      expect(
+        GroupStore.instance.value.selectedScope,
+        const ItemScope.group(id: 'group-2', label: '사무실'),
+      );
+      expect(
+        GroupStore.instance.value.selectedGroupScope,
+        const ItemScope.group(id: 'group-2', label: '사무실'),
+      );
     });
 
     test('passes owner delegation user id when leaving as owner', () async {
@@ -488,18 +719,23 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
   int loadGroupsForUserCalls = 0;
   int loadGroupMembersCalls = 0;
   int leaveGroupCalls = 0;
+  int renameGroupCalls = 0;
   Object? loadDefaultGroupError;
   Object? loadGroupsForUserError;
   Object? loadGroupMembersError;
   Object? leaveGroupError;
+  Object? renameGroupError;
   String? loadGroupMembersGroupId;
   String? leaveGroupGroupId;
   String? leaveGroupNewOwnerUserId;
+  String? renameGroupGroupId;
+  String? renameGroupName;
   Map<String, dynamic>? loadDefaultGroupResult;
   List<Map<String, dynamic>> loadGroupsForUserResult = const [];
   Map<String, dynamic>? createdGroupValues;
   Object? createGroupWithOwnerError;
   List<Map<String, dynamic>> loadGroupMembersResult = const [];
+  String nextCreatedGroupId = 'group-1';
 
   @override
   Future<Map<String, dynamic>?> loadDefaultGroup(String userId) async {
@@ -538,13 +774,27 @@ class _RecordingGroupDatabaseGateway implements GroupDatabaseGateway {
       'invite_code': inviteCode,
     };
     return <String, dynamic>{
-      'id': 'group-1',
+      'id': nextCreatedGroupId,
       'name': name,
       'invite_code': inviteCode,
       'created_by': SupabaseService.currentUserId,
       'created_at': '2026-05-26T00:00:00.000Z',
       'group_members': <Map<String, dynamic>>[],
     };
+  }
+
+  @override
+  Future<Map<String, dynamic>> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    renameGroupCalls += 1;
+    renameGroupGroupId = groupId;
+    renameGroupName = name;
+    if (renameGroupError != null) {
+      throw renameGroupError!;
+    }
+    return _groupRow(id: groupId, name: name);
   }
 
   @override

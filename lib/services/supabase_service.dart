@@ -5,6 +5,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/group.dart';
 import '../models/item.dart';
 import '../models/item_scope.dart';
+import '../models/manual_quantity_snapshot.dart';
+import '../services/ai/category_defaults.dart';
+import '../services/ai/personal_regression_service.dart';
+import '../services/ai/prediction_service.dart';
+import '../services/daily_usage_service.dart';
 
 /// Supabase 연동 서비스
 ///
@@ -121,6 +126,27 @@ class SupabaseService {
     return BuylogGroup.fromSupabase(createdGroup);
   }
 
+  static Future<BuylogGroup> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    final trimmedGroupId = groupId.trim();
+    if (trimmedGroupId.isEmpty) {
+      throw ArgumentError.value(groupId, 'groupId', 'Group id is required.');
+    }
+
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Group name is required.');
+    }
+
+    final updatedGroup = await _groupDatabaseGateway.renameGroup(
+      groupId: trimmedGroupId,
+      name: trimmedName,
+    );
+    return BuylogGroup.fromSupabase(updatedGroup);
+  }
+
   static Future<List<BuylogGroupMember>> loadGroupMembers({
     required String groupId,
   }) async {
@@ -224,13 +250,54 @@ class SupabaseService {
             ?.cast<Map<String, dynamic>>() ??
         <Map<String, dynamic>>[];
     final ai = aiList.isNotEmpty ? aiList.last : null;
+    final inventorySnapshot = _singleInventorySnapshot(
+      row['product_inventory_snapshots'],
+    );
+
+    // Phase 1 회귀 예측: 구매 이력이 없을 때 daily_usage 반영
+    final purchaseDates = purchases
+        .map((p) => DateTime.tryParse(p['purchase_date'] as String? ?? ''))
+        .whereType<DateTime>()
+        .toList();
+
+    final dailyUsage = DailyUsageService.instance.getInternalValue(
+      categoryName,
+    );
+    final defaultDays = categoryDefaultDays[categoryName] ?? 30;
+
+    final localPrediction = predictCycle(
+      purchaseDates: purchaseDates,
+      categoryDefaultDays: defaultDays,
+      categoryName: categoryName,
+      dailyUsage: dailyUsage,
+      personalService: PersonalRegressionService.instance,
+    );
+
+    // Supabase AI 예측이 없거나 Phase 1인 경우 로컬 예측으로 대체
+    final Map<String, dynamic> effectiveAi =
+        ai ??
+        {
+          'predicted_cycle_days': localPrediction.predictedCycleDays,
+          'confidence': localPrediction.confidence,
+        };
 
     return ConsumableItem.fromSupabase(
       data: row,
       categoryName: categoryName,
       purchases: purchases,
-      aiPrediction: ai,
+      aiPrediction: effectiveAi,
+      inventorySnapshot: inventorySnapshot,
     );
+  }
+
+  static Map<String, dynamic>? _singleInventorySnapshot(Object? value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is List && value.isNotEmpty && value.first is Map) {
+      return Map<String, dynamic>.from(value.first as Map);
+    }
+    return null;
   }
 
   /// ConsumableItem을 Supabase에 upsert합니다.
@@ -262,20 +329,39 @@ class SupabaseService {
         'brand': item.brand,
         'image_url': item.imageUrl,
         'replacement_cycle_days': item.cycleDays,
+        'vision_tracking_enabled': item.visionTrackingEnabled,
+        'vision_measure_interval_minutes': item.visionMeasureIntervalMinutes,
       });
 
-      // id가 null인 신규 구매 이력만 삽입
       for (final record in item.purchaseHistory) {
+        final purchasePayload = {
+          'purchase_date': record.date.toIso8601String().substring(0, 10),
+          'price': record.price,
+          'store_name': record.store,
+          'quantity': record.quantity,
+        };
+
         if (record.id == null) {
           await _itemDatabaseGateway.insertPurchase({
             'product_item_id': item.id,
             'purchased_by': uid,
-            'purchase_date': record.date.toIso8601String().substring(0, 10),
-            'price': record.price,
-            'store_name': record.store,
-            'quantity': 1,
+            ...purchasePayload,
           });
+        } else {
+          await _itemDatabaseGateway.updatePurchase(
+            purchaseId: record.id!,
+            payload: purchasePayload,
+          );
         }
+      }
+
+      final remainingQuantity = item.remainingQuantity;
+      if (remainingQuantity != null) {
+        await _itemDatabaseGateway.setManualQuantity(
+          productItemId: item.id,
+          remainingQuantity: remainingQuantity,
+          observedAt: DateTime.now(),
+        );
       }
 
       debugPrint('[Supabase] saveItem 완료: ${item.name} (${item.id})');
@@ -283,6 +369,44 @@ class SupabaseService {
       debugPrint('[Supabase] saveItem 오류: $e');
       rethrow;
     }
+  }
+
+  static Future<ManualQuantitySnapshot> setManualQuantity({
+    required String productItemId,
+    required int remainingQuantity,
+    DateTime? observedAt,
+  }) {
+    if (remainingQuantity < 0) {
+      throw ArgumentError.value(
+        remainingQuantity,
+        'remainingQuantity',
+        'Remaining quantity must be zero or greater.',
+      );
+    }
+    return _itemDatabaseGateway.setManualQuantity(
+      productItemId: productItemId,
+      remainingQuantity: remainingQuantity,
+      observedAt: observedAt ?? DateTime.now(),
+    );
+  }
+
+  static Future<ManualQuantitySnapshot> recordManualUsage({
+    required String productItemId,
+    required int usedQuantity,
+    DateTime? usedAt,
+  }) {
+    if (usedQuantity < 1) {
+      throw ArgumentError.value(
+        usedQuantity,
+        'usedQuantity',
+        'Used quantity must be greater than zero.',
+      );
+    }
+    return _itemDatabaseGateway.recordManualUsage(
+      productItemId: productItemId,
+      usedQuantity: usedQuantity,
+      usedAt: usedAt ?? DateTime.now(),
+    );
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -368,6 +492,11 @@ abstract class GroupDatabaseGateway {
   Future<Map<String, dynamic>> createGroupWithOwner({
     required String name,
     required String inviteCode,
+  });
+
+  Future<Map<String, dynamic>> renameGroup({
+    required String groupId,
+    required String name,
   });
 
   Future<List<Map<String, dynamic>>> loadGroupMembers({
@@ -459,6 +588,20 @@ class SupabaseGroupDatabaseGateway implements GroupDatabaseGateway {
   }
 
   @override
+  Future<Map<String, dynamic>> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    final row = await _client
+        .from('groups')
+        .update({'name': name})
+        .eq('id', groupId)
+        .select(_groupProjection)
+        .single();
+    return Map<String, dynamic>.from(row);
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> loadGroupMembers({
     required String groupId,
   }) async {
@@ -497,6 +640,23 @@ abstract class ItemDatabaseGateway {
   Future<void> upsertItem(Map<String, dynamic> payload);
 
   Future<void> insertPurchase(Map<String, dynamic> payload);
+
+  Future<void> updatePurchase({
+    required String purchaseId,
+    required Map<String, dynamic> payload,
+  });
+
+  Future<ManualQuantitySnapshot> setManualQuantity({
+    required String productItemId,
+    required int remainingQuantity,
+    required DateTime observedAt,
+  });
+
+  Future<ManualQuantitySnapshot> recordManualUsage({
+    required String productItemId,
+    required int usedQuantity,
+    required DateTime usedAt,
+  });
 }
 
 class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
@@ -509,14 +669,28 @@ class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
           user_id,
           group_id,
           registered_by,
+          registered_by_user:users!product_items_registered_by_fkey (
+            id,
+            display_name,
+            email
+          ),
           name,
           brand,
           image_url,
           replacement_cycle_days,
+          vision_tracking_enabled,
+          vision_measure_interval_minutes,
+          vision_last_measured_at,
           created_at,
           categories ( id, name ),
-          purchases ( id, purchase_date, price, store_name ),
-          ai_predictions ( predicted_cycle_days, confidence )
+          purchases ( id, purchase_date, price, store_name, quantity ),
+          ai_predictions ( predicted_cycle_days, confidence ),
+          product_inventory_snapshots (
+            remaining_quantity,
+            confidence,
+            source_detected_name,
+            observed_at
+          )
         ''';
 
   @override
@@ -576,6 +750,54 @@ class SupabaseItemDatabaseGateway implements ItemDatabaseGateway {
   @override
   Future<void> insertPurchase(Map<String, dynamic> payload) async {
     await _client.from('purchases').insert(payload);
+  }
+
+  @override
+  Future<void> updatePurchase({
+    required String purchaseId,
+    required Map<String, dynamic> payload,
+  }) async {
+    await _client.from('purchases').update(payload).eq('id', purchaseId);
+  }
+
+  @override
+  Future<ManualQuantitySnapshot> setManualQuantity({
+    required String productItemId,
+    required int remainingQuantity,
+    required DateTime observedAt,
+  }) async {
+    final row = await _client
+        .rpc(
+          'set_product_manual_quantity',
+          params: {
+            'target_product_item_id': productItemId,
+            'target_remaining_quantity': remainingQuantity,
+            'target_observed_at': observedAt.toIso8601String(),
+          },
+        )
+        .select()
+        .single();
+    return ManualQuantitySnapshot.fromSupabase(Map<String, dynamic>.from(row));
+  }
+
+  @override
+  Future<ManualQuantitySnapshot> recordManualUsage({
+    required String productItemId,
+    required int usedQuantity,
+    required DateTime usedAt,
+  }) async {
+    final row = await _client
+        .rpc(
+          'record_product_usage',
+          params: {
+            'target_product_item_id': productItemId,
+            'target_used_quantity': usedQuantity,
+            'target_used_at': usedAt.toIso8601String(),
+          },
+        )
+        .select()
+        .single();
+    return ManualQuantitySnapshot.fromSupabase(Map<String, dynamic>.from(row));
   }
 }
 
