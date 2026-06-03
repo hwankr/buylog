@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import '../models/item.dart';
 import '../models/price_cache_data.dart';
 import '../services/item_store.dart';
@@ -107,7 +106,6 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   bool _isLoadingPrice = true;
   List<PriceComparison> _realPriceData = [];
   List<String> _buyLinks = []; // 구매 링크 저장용
-  String? _priceErrorMessage;
   bool _isSavingQuantity = false;
 
   @override
