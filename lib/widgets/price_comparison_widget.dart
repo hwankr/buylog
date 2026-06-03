@@ -16,9 +16,12 @@ class PriceComparisonWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-  
-    final int topSingleIndex = realPriceData.indexWhere((p) => p.isLowest == true);
-    final int topBundleIndex = realPriceData.indexWhere((p) => p.isLowest == false);
+    final int topSingleIndex = realPriceData.indexWhere(
+      (p) => p.isLowest == true,
+    );
+    final int topBundleIndex = realPriceData.indexWhere(
+      (p) => p.isLowest == false,
+    );
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -62,72 +65,68 @@ class PriceComparisonWidget extends StatelessWidget {
               style: TextStyle(color: AppColors.textMuted),
             )
           else
-            ...realPriceData.asMap().entries.map(
-              (entry) {
-                final int index = entry.key;
-                final p = entry.value;
+            ...realPriceData.asMap().entries.map((entry) {
+              final int index = entry.key;
+              final p = entry.value;
 
-                final bool isTop1 = (index == topSingleIndex) || (index == topBundleIndex);
+              final bool isTop1 =
+                  (index == topSingleIndex) || (index == topBundleIndex);
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: InkWell(
-                    onTap: () => onLinkTap(index),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 6,
-                        horizontal: 4,
-                      ),
-                      child: Row(
-                        children: [
-                        
-                          if (isTop1)
-                            const Icon(
-                              Icons.check_circle,
-                              size: 16,
-                              color: AppColors.success,
-                            )
-                          else
-                            const SizedBox(width: 16),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              p.store,
-                              style: TextStyle(
-                                fontSize: 14,
-                              
-                                fontWeight: isTop1
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                                color: isTop1
-                                    ? AppColors.text
-                                    : AppColors.textSecondary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            '${p.price}원',
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: InkWell(
+                  onTap: () => onLinkTap(index),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 6,
+                      horizontal: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        if (isTop1)
+                          const Icon(
+                            Icons.check_circle,
+                            size: 16,
+                            color: AppColors.success,
+                          )
+                        else
+                          const SizedBox(width: 16),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            p.store,
                             style: TextStyle(
-                              fontSize: 15,
-                            
+                              fontSize: 14,
+
                               fontWeight: isTop1
-                                  ? FontWeight.w700
+                                  ? FontWeight.w600
                                   : FontWeight.w400,
                               color: isTop1
-                                  ? AppColors.success
-                                  : AppColors.text,
+                                  ? AppColors.text
+                                  : AppColors.textSecondary,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          '${p.price}원',
+                          style: TextStyle(
+                            fontSize: 15,
+
+                            fontWeight: isTop1
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                            color: isTop1 ? AppColors.success : AppColors.text,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            }),
         ],
       ),
     );

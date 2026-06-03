@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -6,15 +5,11 @@ import '../models/item.dart';
 import '../models/price_cache_data.dart';
 import '../services/item_store.dart';
 import '../services/price_comparison_service.dart';
-import '../services/supabase_price_comparison_proxy.dart';
 import '../theme/app_theme.dart';
 import '../widgets/countdown_ring.dart';
 import 'add_item_screen.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../models/price_cache_data.dart';
 import '../widgets/price_comparison_widget.dart';
 
 typedef PriceComparisonGateway =
@@ -139,27 +134,30 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
     }
 
     // 127.0.0.1 or 10.0.2.2
-    final String baseUrl = 'http://127.0.0.1:8080'; 
-    
+    final String baseUrl = 'http://127.0.0.1:8080';
+
     final String keyword = '${_item.brand} ${_item.name}';
-    final String url = '$baseUrl/api/prices/compare?keyword=${Uri.encodeComponent(keyword)}';
+    final String url =
+        '$baseUrl/api/prices/compare?keyword=${Uri.encodeComponent(keyword)}';
 
     try {
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        
+
         List<PriceComparison> newPriceData = [];
         List<String> newBuyLinks = [];
 
         for (var item in data) {
-          newPriceData.add(PriceComparison(
-            store: item['store'],
-            price: item['price'],
-            // 🔥 3. 백엔드의 'single' 키값을 기존 프론트엔드 모델(isLowest)에 매핑
-            isLowest: item['single'] ?? false, 
-          ));
+          newPriceData.add(
+            PriceComparison(
+              store: item['store'],
+              price: item['price'],
+              // 🔥 3. 백엔드의 'single' 키값을 기존 프론트엔드 모델(isLowest)에 매핑
+              isLowest: item['single'] ?? false,
+            ),
+          );
           newBuyLinks.add(item['buyLink'] ?? '');
         }
 
