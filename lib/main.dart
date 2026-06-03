@@ -30,6 +30,15 @@ Future<void> main() async {
     ),
   );
 
+  // Supabase 초기화 (익명 로그인 포함)
+  await SupabaseService.initialize();
+
+  // 제품 목록 초기 로드
+  await ItemStore.instance.initialize();
+
+  // 환경변수 로드
+  await dotenv.load(fileName: ".env");
+
   await bootstrapApp();
   runApp(const BuylogApp());
 }
