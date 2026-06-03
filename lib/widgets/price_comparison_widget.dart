@@ -16,6 +16,10 @@ class PriceComparisonWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+  
+    final int topSingleIndex = realPriceData.indexWhere((p) => p.isLowest == true);
+    final int topBundleIndex = realPriceData.indexWhere((p) => p.isLowest == false);
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -63,6 +67,8 @@ class PriceComparisonWidget extends StatelessWidget {
                 final int index = entry.key;
                 final p = entry.value;
 
+                final bool isTop1 = (index == topSingleIndex) || (index == topBundleIndex);
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: InkWell(
@@ -75,7 +81,8 @@ class PriceComparisonWidget extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          if (p.isLowest)
+                        
+                          if (isTop1)
                             const Icon(
                               Icons.check_circle,
                               size: 16,
@@ -89,10 +96,11 @@ class PriceComparisonWidget extends StatelessWidget {
                               p.store,
                               style: TextStyle(
                                 fontSize: 14,
-                                fontWeight: p.isLowest
+                              
+                                fontWeight: isTop1
                                     ? FontWeight.w600
                                     : FontWeight.w400,
-                                color: p.isLowest
+                                color: isTop1
                                     ? AppColors.text
                                     : AppColors.textSecondary,
                               ),
@@ -104,10 +112,11 @@ class PriceComparisonWidget extends StatelessWidget {
                             '${p.price}원',
                             style: TextStyle(
                               fontSize: 15,
-                              fontWeight: p.isLowest
+                            
+                              fontWeight: isTop1
                                   ? FontWeight.w700
                                   : FontWeight.w400,
-                              color: p.isLowest
+                              color: isTop1
                                   ? AppColors.success
                                   : AppColors.text,
                             ),
