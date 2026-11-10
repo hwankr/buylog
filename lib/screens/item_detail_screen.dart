@@ -1,15 +1,15 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import '../models/item.dart';
 import '../models/price_cache_data.dart';
 import '../services/item_store.dart';
 import '../services/price_comparison_service.dart';
-import '../services/supabase_price_comparison_proxy.dart';
 import '../theme/app_theme.dart';
 import '../widgets/countdown_ring.dart';
 import 'add_item_screen.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../widgets/price_comparison_widget.dart';
 
 typedef PriceComparisonGateway =
     Future<PriceComparisonFetchResult> Function({
@@ -105,7 +105,7 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   // 실시간 가격 데이터 변수
   bool _isLoadingPrice = true;
   List<PriceComparison> _realPriceData = [];
-  String? _priceErrorMessage;
+  List<String> _buyLinks = []; // 구매 링크 저장용
   bool _isSavingQuantity = false;
 
   @override
@@ -118,59 +118,77 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Future<void> _fetchRealTimePrice() async {
-    // 통신 전 캐시 확인
     final cached = _priceCache[_item.id];
     if (cached != null && !cached.isExpired) {
       if (mounted) {
         setState(() {
           _realPriceData = cached.priceData;
-          _priceErrorMessage = null;
+          _buyLinks = cached.buyLinks;
           _isLoadingPrice = false;
         });
       }
-      debugPrint('캐시된 가격 데이터 사용 (API 호출 생략)');
-      return; // 캐시가 있으면 여기서 함수 끝내기
+      debugPrint('최적화: 캐시된 가격 데이터 사용 (서버 호출 생략)');
+      return;
     }
 
-    try {
-      final gateway = widget.priceComparisonGateway;
-      final result = gateway != null
-          ? await gateway(itemName: _item.name, brand: _item.brand, display: 5)
-          : await PriceComparisonService(
-              serverProxy: kIsWeb
-                  ? const SupabasePriceComparisonProxy().fetchComparisons
-                  : null,
-              allowDirectFallback: !kIsWeb,
-            ).fetchComparisonResult(itemName: _item.name, brand: _item.brand);
+    // 127.0.0.1 or 10.0.2.2
+    final String baseUrl = 'http://127.0.0.1:8080';
 
-      if (result.comparisons.isNotEmpty) {
+    final String keyword = '${_item.brand} ${_item.name}';
+    final String url =
+        '$baseUrl/api/prices/compare?keyword=${Uri.encodeComponent(keyword)}';
+
+    try {
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
+
+        List<PriceComparison> newPriceData = [];
+        List<String> newBuyLinks = [];
+
+        for (var item in data) {
+          newPriceData.add(
+            PriceComparison(
+              store: item['store'],
+              price: item['price'],
+              // 🔥 3. 백엔드의 'single' 키값을 기존 프론트엔드 모델(isLowest)에 매핑
+              isLowest: item['single'] ?? false,
+            ),
+          );
+          newBuyLinks.add(item['buyLink'] ?? '');
+        }
+
+        // 캐시 저장
         _priceCache[_item.id] = PriceCacheData(
-          priceData: result.comparisons,
+          priceData: newPriceData,
+          buyLinks: newBuyLinks,
           fetchedAt: DateTime.now(),
         );
-      }
 
-      if (mounted) {
-        setState(() {
-          _realPriceData = result.comparisons;
-          _priceErrorMessage = result.failure == null ? null : result.message;
-          _isLoadingPrice = false;
-        });
+        if (mounted) {
+          setState(() {
+            _realPriceData = newPriceData;
+            _buyLinks = newBuyLinks;
+            _isLoadingPrice = false;
+          });
+        }
+      } else {
+        debugPrint('서버 응답 에러: 상태 코드 ${response.statusCode}');
+        if (mounted) setState(() => _isLoadingPrice = false);
       }
     } catch (e) {
-      debugPrint('통신 및 파싱 에러: $e');
-      if (mounted) {
-        setState(() {
-          _priceErrorMessage = e.toString();
-          _isLoadingPrice = false;
-        });
-      }
+      debugPrint('통신 에러: $e');
+      if (mounted) setState(() => _isLoadingPrice = false);
     }
   }
 
-  Future<void> _launchBuyLink(String? link) async {
-    // null 방어
-    if (link == null || link.isEmpty) return;
+  Future<void> _launchBuyLink(int index) async {
+    if (_buyLinks.isEmpty || _buyLinks.length <= index) return;
+
+    final String link = _buyLinks[index];
+    if (link.isEmpty) return;
+
     final Uri url = Uri.parse(link);
     try {
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
@@ -723,116 +741,10 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
   }
 
   Widget _buildPriceComparison() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border, width: 0.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.auto_awesome_outlined,
-                size: 18,
-                color: AppColors.primary,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'AI 가격 비교',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // 데이터 분기 처리 적용
-          if (_isLoadingPrice)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (_priceErrorMessage != null)
-            Text(
-              '가격 비교를 불러오지 못했습니다. $_priceErrorMessage',
-              style: const TextStyle(color: AppColors.textMuted),
-            )
-          else if (_realPriceData.isEmpty)
-            const Text(
-              '최저가 정보를 찾지 못했습니다.',
-              style: TextStyle(color: AppColors.textMuted),
-            )
-          else
-            ..._realPriceData.map(
-              (p) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                // Row 전체를 InkWell로 감싸고 터치 이벤트(_launchBuyLink)를 연결
-                child: InkWell(
-                  onTap: p.link == null || p.link!.isEmpty
-                      ? null
-                      : () => _launchBuyLink(p.link),
-                  borderRadius: BorderRadius.circular(8), // 터치할 때 물결 효과를 부드럽게
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: 4,
-                    ), // 터치 영역
-                    child: Row(
-                      children: [
-                        if (p.isLowest)
-                          const Icon(
-                            Icons.check_circle,
-                            size: 16,
-                            color: AppColors.success,
-                          )
-                        else
-                          const SizedBox(width: 16),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            p.store, // 여기에 "[쇼핑몰] 제품명 (총 N개 / 개당 N원)" 형태가 들어갑니다.
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: p.isLowest
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                              color: p.isLowest
-                                  ? AppColors.text
-                                  : AppColors.textSecondary,
-                            ),
-                            overflow: TextOverflow.ellipsis, // 글자가 길면 줄임표 처리
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          _formatPrice(p.price),
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: p.isLowest
-                                ? FontWeight.w700
-                                : FontWeight.w400,
-                            color: p.isLowest
-                                ? AppColors.success
-                                : AppColors.text,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+    return PriceComparisonWidget(
+      isLoadingPrice: _isLoadingPrice,
+      realPriceData: _realPriceData,
+      onLinkTap: _launchBuyLink,
     );
   }
 
