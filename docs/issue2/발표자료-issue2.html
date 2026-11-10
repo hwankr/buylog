@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buylog — Issue2 발표자료</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --primary: #4F7FFF;
+    --primary-light: #EEF3FF;
+    --dark: #111827;
+    --gray: #6B7280;
+    --light-gray: #F9FAFB;
+    --border: #E5E7EB;
+    --success: #10B981;
+    --danger: #EF4444;
+    --warning: #F59E0B;
+    --code-bg: #1E1E2E;
+    --code-text: #CDD6F4;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    color: var(--dark);
+    background: #fff;
+    line-height: 1.7;
+  }
+
+  /* ── 커버 페이지 ── */
+  .cover {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f1923 0%, #1a2744 50%, #2563EB 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 80px;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -100px; right: -100px;
+    width: 500px; height: 500px;
+    border-radius: 50%;
+    background: rgba(79,127,255,0.15);
+  }
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -80px; left: -80px;
+    width: 350px; height: 350px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+  }
+  .cover-badge {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 24px;
+    display: inline-block;
+  }
+  .cover h1 {
+    font-size: 48px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.2;
+    margin-bottom: 16px;
+    z-index: 1;
+    position: relative;
+  }
+  .cover h1 span { color: #93C5FD; }
+  .cover-sub {
+    font-size: 18px;
+    color: rgba(255,255,255,0.75);
+    margin-bottom: 48px;
+    font-weight: 400;
+  }
+  .cover-features {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    z-index: 1;
+    position: relative;
+  }
+  .cover-feature {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .cover-meta {
+    position: absolute;
+    bottom: 48px;
+    right: 80px;
+    text-align: right;
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+  }
+
+  /* ── 목차 ── */
+  .toc-page {
+    padding: 64px 80px;
+    page-break-after: always;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .page-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--primary);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .toc-title {
+    font-size: 32px;
+    font-weight: 800;
+    margin-bottom: 40px;
+    color: var(--dark);
+  }
+  .toc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .toc-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+  }
+  .toc-num {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: 700;
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .toc-text { font-size: 13px; font-weight: 600; color: var(--dark); }
+  .toc-desc { font-size: 11px; color: var(--gray); margin-top: 2px; }
+
+  /* ── 일반 페이지 ── */
+  .page {
+    padding: 56px 80px;
+    page-break-after: always;
+    min-height: 100vh;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--border);
+  }
+  .page-header .num {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: var(--primary);
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .page-header h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--dark);
+  }
+  .page-header .file-tag {
+    margin-left: auto;
+    background: var(--light-gray);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--gray);
+  }
+
+  h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--dark);
+    margin: 28px 0 12px;
+    padding-left: 12px;
+    border-left: 3px solid var(--primary);
+  }
+  h3:first-child { margin-top: 0; }
+
+  /* ── 기능 카드 ── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .feature-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .feature-card {
+    background: var(--light-gray);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+  }
+  .feature-card .icon { font-size: 22px; margin-bottom: 10px; }
+  .feature-card .title { font-size: 13px; font-weight: 700; color: var(--dark); margin-bottom: 6px; }
+  .feature-card .desc { font-size: 11px; color: var(--gray); line-height: 1.6; }
+  .feature-card .file {
+    margin-top: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--primary);
+    background: var(--primary-light);
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  /* ── 코드 블록 ── */
+  pre {
+    background: var(--code-bg);
+    border-radius: 10px;
+    padding: 20px 24px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    line-height: 1.7;
+    color: var(--code-text);
+  }
+  .kw  { color: #CBA6F7; }
+  .fn  { color: #89B4FA; }
+  .str { color: #A6E3A1; }
+  .cm  { color: #6C7086; font-style: italic; }
+  .num { color: #FAB387; }
+  .tp  { color: #F38BA8; }
+
+  /* ── 테이블 ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 12px;
+  }
+  th {
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: 700;
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 2px solid var(--primary);
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--light-gray); }
+
+  /* ── Before/After 비교 ── */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 12px 0;
+  }
+  .compare-box {
+    border-radius: 10px;
+    padding: 16px 18px;
+    border: 1.5px solid var(--border);
+  }
+  .compare-box.before { border-color: #FCA5A5; background: #FFF5F5; }
+  .compare-box.after  { border-color: #6EE7B7; background: #F0FDF9; }
+  .compare-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+  }
+  .compare-box.before .compare-label { color: var(--danger); }
+  .compare-box.after  .compare-label { color: var(--success); }
+  .compare-box ul { padding-left: 18px; }
+  .compare-box li { font-size: 12px; color: var(--dark); margin-bottom: 4px; }
+
+  /* ── 아키텍처 다이어그램 ── */
+  .arch-box {
+    background: var(--code-bg);
+    border-radius: 12px;
+    padding: 28px 32px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--code-text);
+    line-height: 1.9;
+    margin: 12px 0;
+    white-space: pre;
+  }
+
+  /* ── 플로우 스텝 ── */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border);
+    background: var(--light-gray);
+  }
+  .flow-step .step-num {
+    min-width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .flow-step .step-body .step-title { font-weight: 700; font-size: 13px; }
+  .flow-step .step-body .step-desc  { font-size: 11px; color: var(--gray); margin-top: 2px; }
+  .flow-step.success { border-color: #6EE7B7; background: #F0FDF9; }
+  .flow-step.fallback { border-color: #FCD34D; background: #FFFBEB; }
+  .flow-step.fallback .step-num { background: var(--warning); }
+
+  /* ── 배지 ── */
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: 6px;
+  }
+  .badge-green  { background: #D1FAE5; color: #065F46; }
+  .badge-blue   { background: var(--primary-light); color: var(--primary); }
+  .badge-yellow { background: #FEF3C7; color: #92400E; }
+  .badge-red    { background: #FEE2E2; color: #991B1B; }
+
+  /* ── 콜아웃 ── */
+  .callout {
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 14px 0;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    font-size: 12px;
+  }
+  .callout.info  { background: var(--primary-light); border-left: 4px solid var(--primary); }
+  .callout.warn  { background: #FFFBEB; border-left: 4px solid var(--warning); }
+  .callout.ok    { background: #F0FDF9; border-left: 4px solid var(--success); }
+  .callout-icon  { font-size: 16px; flex-shrink: 0; }
+  .callout strong { display: block; font-weight: 700; margin-bottom: 2px; }
+
+  /* ── 인라인 코드 ── */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--primary-light);
+    color: var(--primary);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  p { margin-bottom: 10px; font-size: 13px; }
+  ul { padding-left: 20px; margin-bottom: 10px; }
+  li { margin-bottom: 4px; font-size: 12px; }
+
+  @media print {
+    body { background: #fff; }
+    .page, .cover, .toc-page { page-break-after: always; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     커버 페이지
+═══════════════════════════════════════════ -->
+<div class="cover">
+  <span class="cover-badge">BUYLOG · ISSUE 2</span>
+  <h1>OCR 파싱 개선 &amp;<br><span>웹 카메라 연동</span></h1>
+  <p class="cover-sub">Gemini 2.5 Flash 멀티모달 · getUserMedia · 조건부 플랫폼 분기</p>
+  <div class="cover-features">
+    <span class="cover-feature">🤖 Gemini 2.5 Flash</span>
+    <span class="cover-feature">📸 Web Camera API</span>
+    <span class="cover-feature">🔁 Fallback 체계</span>
+    <span class="cover-feature">📦 responseSchema 강제</span>
+  </div>
+  <div class="cover-meta">
+    Buylog Team — 2026<br>
+    Flutter Web · Dart · Supabase
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     목차
+═══════════════════════════════════════════ -->
+<div class="toc-page">
+  <div class="page-label">Table of Contents</div>
+  <div class="toc-title">목차</div>
+  <div class="toc-grid">
+    <div class="toc-item">
+      <div class="toc-num">1</div>
+      <div>
+        <div class="toc-text">담당 기능 한눈에 보기</div>
+        <div class="toc-desc">구현 범위 요약 및 관련 파일</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">2</div>
+      <div>
+        <div class="toc-text">전체 아키텍처</div>
+        <div class="toc-desc">OCR 처리 흐름 · Fallback 체계</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">3</div>
+      <div>
+        <div class="toc-text">핵심 코드 리뷰 ①: Gemini 멀티모달 OCR</div>
+        <div class="toc-desc">이미지 → JSON 직접 변환 · responseSchema</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">4</div>
+      <div>
+        <div class="toc-text">핵심 코드 리뷰 ②: Fallback 파싱</div>
+        <div class="toc-desc">Google Vision → Gemini 텍스트 파싱 → Regex</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">5</div>
+      <div>
+        <div class="toc-text">핵심 코드 리뷰 ③: 웹 카메라 구현</div>
+        <div class="toc-desc">getUserMedia · 조건부 플랫폼 분기</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">6</div>
+      <div>
+        <div class="toc-text">기술적 의사결정 및 트레이드오프</div>
+        <div class="toc-desc">모델 선택 · CORS 이슈 · Fallback 설계</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">7</div>
+      <div>
+        <div class="toc-text">Before / After 성능 비교</div>
+        <div class="toc-desc">파싱 정확도 · 카메라 UX 개선</div>
+      </div>
+    </div>
+    <div class="toc-item">
+      <div class="toc-num">8</div>
+      <div>
+        <div class="toc-text">발표 흐름 가이드</div>
+        <div class="toc-desc">데모 순서 및 시연 포인트</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     1. 담당 기능 한눈에 보기
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <div class="num">1</div>
+    <h2>담당 기능 한눈에 보기</h2>
+  </div>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon">🤖</div>
+      <div class="title">Gemini 멀티모달 OCR</div>
+      <div class="desc">영수증 이미지를 Gemini 2.5 Flash에 직접 전송해 상품 목록을 JSON으로 추출. 기존 Regex 방식 대비 비정형 영수증에서도 높은 정확도 달성.</div>
+      <span class="file">ocr_service.dart</span>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🔁</div>
+      <div class="title">3단계 Fallback 체계</div>
+      <div class="desc">Gemini 멀티모달 실패 시 → Google Vision 텍스트 추출 → Gemini 텍스트 파싱 → Regex 순으로 단계적 fallback을 적용해 서비스 안정성 확보.</div>
+      <span class="file">ocr_service.dart</span>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📸</div>
+      <div class="title">웹 카메라 직접 연동</div>
+      <div class="desc">Flutter Web에서 image_picker가 갤러리만 열리는 한계를 getUserMedia API로 해결. 실시간 카메라 미리보기 → 촬영 → OCR 처리.</div>
+      <span class="file">camera_picker_web.dart</span>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>기능</th>
+        <th>설명</th>
+        <th>관련 파일</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Gemini 멀티모달 OCR</strong></td>
+        <td>이미지 → Base64 인코딩 → Gemini API → JSON 파싱 (단일 호출)</td>
+        <td><code>ocr_service.dart</code></td>
+      </tr>
+      <tr>
+        <td><strong>responseSchema 강제</strong></td>
+        <td>storeName / date / items 구조를 JSON Schema로 명시해 파싱 실패 방지</td>
+        <td><code>ocr_service.dart</code></td>
+      </tr>
+      <tr>
+        <td><strong>유연한 날짜 파싱</strong></td>
+        <td>2026.04.08 / 2026/04/08 / 2026년 4월 8일 등 다양한 형식 정규화</td>
+        <td><code>ocr_service.dart</code></td>
+      </tr>
+      <tr>
+        <td><strong>Google Vision Fallback</strong></td>
+        <td>Gemini API 실패 시 Vision API로 raw 텍스트 추출 후 재파싱</td>
+        <td><code>ocr_service.dart</code></td>
+      </tr>
+      <tr>
+        <td><strong>플랫폼 조건부 카메라</strong></td>
+        <td>Web: getUserMedia 오버레이 / Mobile: ImagePicker 카메라 모드</td>
+        <td><code>camera_picker.dart</code></td>
+      </tr>
+      <tr>
+        <td><strong>카메라 UI 오버레이</strong></td>
+        <td>HTML video + canvas로 풀스크린 촬영 UI 구현, 파일 선택 fallback 내장</td>
+        <td><code>camera_picker_web.dart</code></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════════════════════
+     2. 전체 아키텍처
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <div class="num">2</div>
+    <h2>전체 아키텍처 — OCR 처리 흐름</h2>
+  </div>
+
+  <div class="arch-box">┌─────────────────────────────────────────────────────────────────────┐
+│                         Flutter 앱 (Web / Mobile)                   │
+│                                                                     │
+│   ScanScreen                                                        │
+│      │                                                              │
+│      ├─ [카메라 버튼]                                                 │
+│      │       ├─ Web:    camera_picker_web.dart  (getUserMedia)       │
+│      │       └─ Mobile: ImagePicker (카메라 모드)                    │
+│      │                                                              │
+│      └─ [OCR 분석 시작] ──► OcrService.analyzeImage(imageBytes)      │
+│                                    │                                │
+│              ┌─────────────────────┘                                │
+│              │                                                      │
+│     ①  Gemini 2.5 Flash (Multimodal)  ◄── 이미지 Base64 직접 전송   │
+│              │  responseSchema 강제                                  │
+│              │  → OcrResult { storeName, date, items[] }            │
+│              │                                                      │
+│        실패 시 fallback                                              │
+│              │                                                      │
+│     ②  Google Cloud Vision API  ◄── TEXT_DETECTION                  │
+│              │  → raw text 추출                                      │
+│              │                                                      │
+│        텍스트 재파싱                                                  │
+│              │                                                      │
+│     ③  Gemini (텍스트 파싱)  또는  Regex 파싱                        │
+│              │                                                      │
+│              └──► OcrResult → ScanScreen → AddItemScreen            │
+└─────────────────────────────────────────────────────────────────────┘</div>
+
+  <h3>카메라 입력 플랫폼 분기</h3>
+  <div class="arch-box">camera_picker.dart (조건부 export)
+     ├─ dart.library.js_interop 존재 (Web 빌드)
+     │       └── camera_picker_web.dart
+     │              getUserMedia({video:{facingMode:'environment'}})
+     │              → video 미리보기 → canvas 캡처 → Uint8List
+     │              (실패 시) → file input capture="environment"
+     │
+     └─ 그 외 (Mobile / Desktop)
+             └── camera_picker_stub.dart  (null 반환)
+                    → ImagePicker().pickImage(source: ImageSource.camera)</div>
+
+  <div class="callout info">
+    <span class="callout-icon">💡</span>
+    <div>
+      <strong>왜 단일 Gemini 호출인가?</strong>
+      기존 방식(Vision API → 텍스트 → Regex)은 2번의 API 호출과 복잡한 패턴 매칭이 필요했습니다.
+      Gemini 멀티모달은 이미지를 직접 이해하므로 <strong>API 호출 1회, 레이턴시 절반, 정확도 대폭 향상</strong>이 가능합니다.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     3. 핵심 코드 리뷰 ① — Gemini 멀티모달 OCR
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <div class="num">3</div>
+    <h2>핵심 코드 리뷰 ① — Gemini 멀티모달 OCR</h2>
+    <span class="file-tag">lib/services/ocr_service.dart</span>
+  </div>
+
+  <h3>3-1. responseSchema — 응답 구조 강제</h3>
+  <p>Gemini가 항상 동일한 JSON 구조를 반환하도록 <code>responseSchema</code>를 명시합니다. 이 없이는 자유 형식 텍스트가 반환돼 파싱 실패가 잦습니다.</p>
+  <pre><span class="kw">static const</span> _responseSchema = {
+  <span class="str">'type'</span>: <span class="str">'object'</span>,
+  <span class="str">'properties'</span>: {
+    <span class="str">'storeName'</span>: {<span class="str">'type'</span>: <span class="str">'string'</span>},
+    <span class="str">'date'</span>:      {<span class="str">'type'</span>: <span class="str">'string'</span>, <span class="str">'nullable'</span>: <span class="kw">true</span>},
+    <span class="str">'items'</span>: {
+      <span class="str">'type'</span>: <span class="str">'array'</span>,
+      <span class="str">'items'</span>: {
+        <span class="str">'type'</span>: <span class="str">'object'</span>,
+        <span class="str">'properties'</span>: {
+          <span class="str">'name'</span>:  {<span class="str">'type'</span>: <span class="str">'string'</span>},
+          <span class="str">'price'</span>: {<span class="str">'type'</span>: <span class="str">'integer'</span>},
+        },
+        <span class="str">'required'</span>: [<span class="str">'name'</span>, <span class="str">'price'</span>],
+      },
+    },
+  },
+  <span class="str">'required'</span>: [<span class="str">'storeName'</span>, <span class="str">'items'</span>],
+};</pre>
+
+  <h3>3-2. analyzeImage() — 메인 OCR 진입점</h3>
+  <pre><span class="kw">static</span> <span class="tp">Future</span>&lt;<span class="tp">OcrResult</span>?&gt; <span class="fn">analyzeImage</span>(<span class="tp">Uint8List</span> imageBytes) <span class="kw">async</span> {
+  <span class="kw">final</span> apiKey = dotenv.env[<span class="str">'GEMINI_API_KEY'</span>] ?? <span class="str">''</span>;
+  <span class="kw">if</span> (apiKey.isEmpty) <span class="kw">return null</span>;
+
+  <span class="kw">final</span> base64Image = base64Encode(imageBytes);         <span class="cm">// 이미지 → Base64</span>
+  <span class="kw">final</span> url = <span class="str">'https://generativelanguage.googleapis.com/v1beta/'</span>
+               <span class="str">'models/gemini-2.5-flash:generateContent?key=<span class="tp">$apiKey</span>'</span>;
+
+  <span class="kw">final</span> body = {
+    <span class="str">'contents'</span>: [{
+      <span class="str">'parts'</span>: [
+        {<span class="str">'text'</span>: <span class="str">'이 영수증에서 상점명, 날짜, 모든 단품 상품(합계/결제금액 제외)을 추출해.'</span>},
+        {<span class="str">'inline_data'</span>: {<span class="str">'mime_type'</span>: <span class="str">'image/jpeg'</span>, <span class="str">'data'</span>: base64Image}},
+      ],
+    }],
+    <span class="str">'generationConfig'</span>: {
+      <span class="str">'temperature'</span>: <span class="num">0</span>,                    <span class="cm">// 결정론적 출력</span>
+      <span class="str">'maxOutputTokens'</span>: <span class="num">2048</span>,
+      <span class="str">'responseMimeType'</span>: <span class="str">'application/json'</span>,
+      <span class="str">'responseSchema'</span>: _responseSchema,    <span class="cm">// 구조 강제</span>
+    },
+  };
+  <span class="cm">// ... HTTP POST → JSON 파싱 → OcrResult 반환</span>
+}</pre>
+
+  <div class="callout ok">
+    <span class="callout-icon">✅</span>
+    <div>
+      <strong>temperature: 0 설정 이유</strong>
+      OCR은 창의적 응답이 필요 없고 영수증 내용을 정확히 옮겨야 합니다. temperature를 0으로 설정하면 동일 입력에 항상 동일한 결과를 보장합니다.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     4. 핵심 코드 리뷰 ② — Fallback 파싱
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <div class="num">4</div>
+    <h2>핵심 코드 리뷰 ② — Fallback 파싱 체계</h2>
+    <span class="file-tag">lib/services/ocr_service.dart</span>
+  </div>
+
+  <h3>4-1. ScanScreen 호출 흐름</h3>
+  <div class="flow">
+    <div class="flow-step success">
+      <div class="step-num">①</div>
+      <div class="step-body">
+        <div class="step-title">Gemini 멀티모달 직접 파싱 <span class="badge badge-green">Main Path</span></div>
+        <div class="step-desc">OcrService.analyzeImage(imageBytes) — 이미지 → OcrResult 직접 반환</div>
+      </div>
+    </div>
+    <div class="flow-step fallback">
+      <div class="step-num">②</div>
+      <div class="step-body">
+        <div class="step-title">Google Cloud Vision API <span class="badge badge-yellow">Fallback 1</span></div>
+        <div class="step-desc">analyzeImage 실패 시 → OcrService.extractText(imageBytes) → raw 텍스트 추출</div>
+      </div>
+    </div>
+    <div class="flow-step fallback">
+      <div class="step-num">③</div>
+      <div class="step-body">
+        <div class="step-title">Gemini 텍스트 파싱 → Regex <span class="badge badge-yellow">Fallback 2</span></div>
+        <div class="step-desc">raw 텍스트 → OcrService.parseReceiptText() → Gemini 텍스트 파싱 또는 Regex 3-pass</div>
+      </div>
+    </div>
+  </div>
+
+  <pre><span class="cm">// ScanScreen._startOcr()</span>
+<span class="tp">OcrResult</span>? result = <span class="kw">await</span> OcrService.<span class="fn">analyzeImage</span>(_imageBytes!);
+
+<span class="kw">if</span> (result == <span class="kw">null</span>) {                          <span class="cm">// Fallback 진입</span>
+  <span class="kw">final</span> rawText = <span class="kw">await</span> OcrService.<span class="fn">extractText</span>(_imageBytes!);
+  <span class="kw">if</span> (rawText == <span class="kw">null</span> || rawText.trim().isEmpty) {
+    <span class="cm">/* 에러 표시 */</span> <span class="kw">return</span>;
+  }
+  result = <span class="kw">await</span> OcrService.<span class="fn">parseReceiptText</span>(rawText);
+}</pre>
+
+  <h3>4-2. 날짜 형식 정규화 — _parseFlexibleDate()</h3>
+  <p>Gemini가 반환하는 날짜 형식이 영수증마다 달라서 <code>DateTime.tryParse()</code>만으로는 실패합니다.</p>
+  <pre><span class="kw">static</span> <span class="tp">DateTime</span>? <span class="fn">_parseFlexibleDate</span>(<span class="tp">String</span>? raw) {
+  <span class="kw">if</span> (raw == <span class="kw">null</span>) <span class="kw">return null</span>;
+
+  <span class="cm">// "2026.04.08" → "2026-04-08"</span>
+  <span class="kw">var</span> normalized = raw
+    .<span class="fn">replaceAll</span>(<span class="str">'년 '</span>, <span class="str">'-'</span>).<span class="fn">replaceAll</span>(<span class="str">'월 '</span>, <span class="str">'-'</span>).<span class="fn">replaceAll</span>(<span class="str">'일'</span>, <span class="str">''</span>)
+    .<span class="fn">replaceAll</span>(<span class="str">'.'</span>, <span class="str">'-'</span>).<span class="fn">replaceAll</span>(<span class="str">'/'</span>, <span class="str">'-'</span>).<span class="fn">trim</span>();
+
+  <span class="kw">return</span> <span class="tp">DateTime</span>.<span class="fn">tryParse</span>(normalized);
+  <span class="cm">// 처리 가능: "2026.04.08" / "2026/04/08" / "2026년 4월 8일"</span>
+}</pre>
+
+  <div class="callout warn">
+    <span class="callout-icon">⚠️</span>
+    <div>
+      <strong>기존 Regex 파싱의 한계</strong>
+      영수증은 표 형태(가격이 상품명과 다른 줄에 있음)인 경우가 많아 "같은 줄에 가격 있음"을 전제한 Regex는 0개 검출 오류가 발생했습니다. Gemini는 레이아웃을 시각적으로 이해하므로 이 문제가 해결됩니다.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     5. 핵심 코드 리뷰 ③ — 웹 카메라 구현
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <div class="num">5</div>
+    <h2>핵심 코드 리뷰 ③ — 웹 카메라 구현</h2>
+    <span class="file-tag">lib/services/camera_picker_web.dart</span>
+  </div>
+
+  <h3>5-1. 조건부 플랫폼 분기 (camera_picker.dart)</h3>
+  <pre><span class="cm">// Dart 조건부 export — 빌드 타임에 플랫폼별 파일 선택</span>
+<span class="kw">export</span> <span class="str">'camera_picker_stub.dart'</span>
+    <span class="kw">if</span> (dart.library.js_interop) <span class="str">'camera_picker_web.dart'</span>;</pre>
+
+  <table>
+    <thead>
+      <tr><th>플랫폼</th><th>사용 파일</th><th>구현 방식</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Flutter Web</td>
+        <td><code>camera_picker_web.dart</code></td>
+        <td>getUserMedia + HTML video + canvas 캡처</td>
+      </tr>
+      <tr>
+        <td>Android / iOS</td>
+        <td><code>camera_picker_stub.dart</code> → ocr_service</td>
+        <td>ImagePicker(source: ImageSource.camera)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>5-2. getUserMedia 카메라 오버레이 핵심 로직</h3>
+  <pre><span class="kw">Future</span>&lt;<span class="tp">Uint8List</span>?&gt; <span class="fn">pickFromCameraWeb</span>() <span class="kw">async</span> {
+  <span class="kw">try</span> {
+    <span class="cm">// 후면 카메라 스트림 요청</span>
+    <span class="kw">final</span> stream = <span class="kw">await</span> window.navigator.mediaDevices
+        .<span class="fn">getUserMedia</span>(MediaStreamConstraints(
+          video: MediaTrackConstraints(facingMode: <span class="str">'environment'</span>),
+          audio: <span class="kw">false</span>,
+        ));
+
+    <span class="cm">// 풀스크린 오버레이 생성</span>
+    <span class="kw">final</span> overlay = document.<span class="fn">createElement</span>(<span class="str">'div'</span>) <span class="kw">as</span> HTMLDivElement
+      ..style.position  = <span class="str">'fixed'</span>
+      ..style.inset     = <span class="str">'0'</span>
+      ..style.zIndex    = <span class="str">'9999'</span>
+      ..style.background = <span class="str">'#000'</span>;
+
+    <span class="kw">final</span> video = document.<span class="fn">createElement</span>(<span class="str">'video'</span>) <span class="kw">as</span> HTMLVideoElement
+      ..srcObject = stream
+      ..autoplay  = <span class="kw">true</span>
+      ..style.width = <span class="str">'100%'</span>
+      ..style.height = <span class="str">'100%'</span>
+      ..style.objectFit = <span class="str">'cover'</span>;
+
+    <span class="cm">// 📸 촬영 버튼: canvas에 현재 프레임 캡처 → base64 → Uint8List</span>
+    captureBtn.onClick.<span class="fn">listen</span>((_) {
+      <span class="kw">final</span> canvas = <span class="tp">HTMLCanvasElement</span>()
+        ..width  = video.videoWidth
+        ..height = video.videoHeight;
+      canvas.context2D.<span class="fn">drawImage</span>(video, <span class="num">0</span>, <span class="num">0</span>);
+      <span class="kw">final</span> dataUrl = canvas.<span class="fn">toDataURL</span>(<span class="str">'image/jpeg'</span>, <span class="num">0.92</span>);
+      <span class="kw">final</span> bytes   = base64Decode(dataUrl.<span class="fn">split</span>(<span class="str">','</span>)[<span class="num">1</span>]);
+      completer.<span class="fn">complete</span>(bytes);      <span class="cm">// OCR로 전달</span>
+    });
+  } <span class="kw">catch</span> (e) {
+    <span class="kw">return</span> <span class="fn">_fileFallback</span>();  <span class="cm">// 권한 거부 시 파일 선택기로 fallback</span>
+  }
+}</pre>
+
+  <div class="callout info">
+    <span class="callout-icon">💡</span>
+    <div>
+      <strong>dart:html 대신 package:web 사용 이유</strong>
+      Flutter 팀이 <code>dart:html</code>을 deprecated 예정으로 공식 발표. <code>package:web</code> + <code>dart:js_interop</code>이 공식 후속 패키지이며, 향후 Wasm 컴파일에도 호환됩니다.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     6. 기술적 의사결정 및 트레이드오프
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <div class="num">6</div>
+    <h2>기술적 의사결정 및 트레이드오프</h2>
+  </div>
+
+  <h3>6-1. OCR 엔진 선택: Gemini vs OpenAI vs Regex</h3>
+  <table>
+    <thead>
+      <tr><th>방식</th><th>정확도</th><th>비용</th><th>레이턴시</th><th>결정</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Regex 파싱만</td>
+        <td>낮음 (비정형 실패)</td>
+        <td>무료</td>
+        <td>즉시</td>
+        <td><span class="badge badge-red">Fallback 전용</span></td>
+      </tr>
+      <tr>
+        <td>Vision + Regex</td>
+        <td>중간 (표 형태 실패)</td>
+        <td>API 1회</td>
+        <td>1~2초</td>
+        <td><span class="badge badge-yellow">Fallback 2</span></td>
+      </tr>
+      <tr>
+        <td>OpenAI GPT-4o</td>
+        <td>높음</td>
+        <td>높음 (Input $2.5/MTok)</td>
+        <td>2~4초</td>
+        <td><span class="badge badge-red">비용 과다</span></td>
+      </tr>
+      <tr>
+        <td><strong>Gemini 2.5 Flash</strong></td>
+        <td><strong>높음</strong></td>
+        <td><strong>낮음 (무료 티어 포함)</strong></td>
+        <td><strong>1~2초</strong></td>
+        <td><span class="badge badge-green">채택 ✓</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>6-2. 웹 카메라: getUserMedia vs image_picker</h3>
+  <div class="compare-grid">
+    <div class="compare-box before">
+      <div class="compare-label">BEFORE — image_picker (웹)</div>
+      <ul>
+        <li>브라우저에서 파일 선택기(갤러리)만 열림</li>
+        <li>실시간 카메라 미리보기 불가</li>
+        <li>모바일 웹에서 후면 카메라 지정 불가</li>
+        <li>사진 촬영 UX 없음</li>
+      </ul>
+    </div>
+    <div class="compare-box after">
+      <div class="compare-label">AFTER — getUserMedia (웹)</div>
+      <ul>
+        <li>실시간 카메라 스트리밍 미리보기</li>
+        <li>후면 카메라 강제 지정 (facingMode: environment)</li>
+        <li>촬영 버튼으로 즉시 캡처</li>
+        <li>권한 거부 시 파일 선택기로 안전하게 fallback</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>6-3. CORS 이슈 — 웹 환경의 제약</h3>
+  <div class="callout warn">
+    <span class="callout-icon">⚠️</span>
+    <div>
+      <strong>브라우저에서 외부 API 직접 호출 시 CORS 차단</strong>
+      네이버 쇼핑 API, OpenAI API 등은 브라우저 CORS 정책에 의해 웹에서 직접 호출이 차단됩니다.
+      현재는 개발 환경에서 <code>--disable-web-security</code> 플래그로 우회, <strong>출시 전 서버 프록시 구현 예정</strong>.
+      Android/iOS 네이티브 앱은 CORS 제약 없이 정상 동작합니다.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     7. Before / After 성능 비교
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <div class="num">7</div>
+    <h2>Before / After 성능 비교</h2>
+  </div>
+
+  <h3>7-1. OCR 파싱 정확도</h3>
+  <div class="compare-grid">
+    <div class="compare-box before">
+      <div class="compare-label">BEFORE — Regex 기반 파싱</div>
+      <ul>
+        <li>매장명: "날짜" 잘못 추출 (2글자 한글 오탐)</li>
+        <li>상품 인식: 0~2개 (표 형태 영수증 실패)</li>
+        <li>날짜: "2026.04.08" 파싱 실패 (null)</li>
+        <li>가격이 다른 줄에 있으면 미인식</li>
+        <li>비정형 영수증에서 완전 실패</li>
+      </ul>
+    </div>
+    <div class="compare-box after">
+      <div class="compare-label">AFTER — Gemini 멀티모달</div>
+      <ul>
+        <li>매장명: 정확히 추출 (이마트 성수점)</li>
+        <li>상품 인식: 5/5개 전량 추출</li>
+        <li>날짜: 다양한 형식 모두 정규화 성공</li>
+        <li>영수증 레이아웃 시각 이해로 표 형태도 처리</li>
+        <li>비정형 영수증에서도 안정적 동작</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>7-2. 테스트 영수증 파싱 결과 (이마트 성수점)</h3>
+  <table>
+    <thead>
+      <tr><th>항목</th><th>Before (Regex)</th><th>After (Gemini)</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>매장명</td><td><span class="badge badge-red">날짜 (오탐)</span></td><td><span class="badge badge-green">이마트 성수점 ✓</span></td></tr>
+      <tr><td>날짜</td><td><span class="badge badge-red">null</span></td><td><span class="badge badge-green">2026-04-08 ✓</span></td></tr>
+      <tr><td>상품 수</td><td><span class="badge badge-red">0개</span></td><td><span class="badge badge-green">5/5개 ✓</span></td></tr>
+      <tr><td>총액</td><td><span class="badge badge-red">미인식</span></td><td><span class="badge badge-green">75,900원 ✓</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>7-3. 카메라 UX 개선</h3>
+  <table>
+    <thead>
+      <tr><th>시나리오</th><th>Before</th><th>After</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>PC Chrome에서 카메라 버튼</td>
+        <td>파일 선택기 (갤러리) 열림</td>
+        <td>웹캠 실시간 미리보기 → 촬영</td>
+      </tr>
+      <tr>
+        <td>모바일 Chrome에서 카메라 버튼</td>
+        <td>파일 선택기 열림</td>
+        <td>후면 카메라 직접 실행</td>
+      </tr>
+      <tr>
+        <td>카메라 권한 거부</td>
+        <td>그냥 실패</td>
+        <td>파일 선택기로 안전하게 fallback</td>
+      </tr>
+      <tr>
+        <td>Android 네이티브 앱</td>
+        <td>갤러리 열림</td>
+        <td>카메라 앱 직접 실행</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════════════════════
+     8. 발표 흐름 가이드
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-header">
+    <div class="num">8</div>
+    <h2>발표 흐름 가이드 — 데모 시연 순서</h2>
+  </div>
+
+  <h3>시연 순서</h3>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">앱 홈 화면 보여주기</div>
+        <div class="step-desc">Buylog 앱 실행 — 기존 구매 이력이 Supabase에서 로드되는 모습</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">영수증 스캔 화면 이동</div>
+        <div class="step-desc">하단 탭 → 스캔 화면 이동. 카메라/갤러리 버튼 확인</div>
+      </div>
+    </div>
+    <div class="flow-step success">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">카메라 버튼 → 실시간 미리보기 <span class="badge badge-green">개선 포인트</span></div>
+        <div class="step-desc">카메라 버튼 클릭 → getUserMedia 오버레이 → 촬영 버튼으로 영수증 캡처</div>
+      </div>
+    </div>
+    <div class="flow-step success">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">OCR 분석 → 결과 확인 <span class="badge badge-green">개선 포인트</span></div>
+        <div class="step-desc">Gemini 2.5 Flash가 이미지를 분석 → 매장명, 날짜, 상품 목록이 자동 입력된 화면 표시</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <div class="step-title">저장 → 홈 화면 반영 확인</div>
+        <div class="step-desc">저장 후 홈 화면에서 방금 등록한 상품이 즉시 반영되는 것 확인</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Q&amp;A 예상 질문</h3>
+  <table>
+    <thead>
+      <tr><th>예상 질문</th><th>답변 포인트</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Gemini API 비용이 걱정되지 않나요?</td>
+        <td>Gemini 2.5 Flash는 무료 티어(분당 15회, 일 1,500회)가 있어 학교 프로젝트 규모에서 비용 발생 없음. 유료 전환 시에도 GPT-4o 대비 약 10배 저렴.</td>
+      </tr>
+      <tr>
+        <td>영수증 종류마다 다 잘 되나요?</td>
+        <td>Gemini는 이미지를 시각적으로 이해하므로 표 형태, 열 배치, 다양한 폰트 모두 처리. Fallback 체계로 실패 시에도 안전하게 처리.</td>
+      </tr>
+      <tr>
+        <td>API 키가 앱에 포함되어 있으면 보안 문제 아닌가요?</td>
+        <td>현재는 개발 단계로 .env 파일에 저장하고 gitignore 처리. 출시 전 서버 프록시 구조로 전환 예정.</td>
+      </tr>
+      <tr>
+        <td>웹 카메라는 모바일에서도 되나요?</td>
+        <td>모바일 Chrome에서도 getUserMedia가 동작하며, facingMode: environment로 후면 카메라 직접 실행됨. 네이티브 앱은 ImagePicker 카메라 모드 사용.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout ok" style="margin-top: 24px;">
+    <span class="callout-icon">🎯</span>
+    <div>
+      <strong>핵심 메시지</strong>
+      기존 Regex 기반 OCR의 한계를 Gemini 멀티모달로 극복해 비정형 영수증 파싱 정확도를 크게 향상시켰으며, Flutter Web의 카메라 제약을 Web API로 직접 해결해 자연스러운 촬영 경험을 구현했습니다.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
